@@ -17,6 +17,13 @@ VAULT_DIRS = {}
 COLLECTIONS = []
 
 
+def sticker_collection(sticker):
+    path = sticker.get("path", "").replace("\\", "/")
+    if "/" in path:
+        return path.split("/", 1)[0]
+    return sticker.get("collection") or sticker.get("set", "")
+
+
 def load_data():
     global STICKERS, STICKERS_BY_SET, TFIDF_INDEX, VAULT_DIRS, COLLECTIONS
     meta_path = "data/stickers.json"
@@ -25,8 +32,12 @@ def load_data():
             STICKERS = json.load(f)
         print(f"[load] {len(STICKERS)} annotations")
     for s in STICKERS:
+        cn = sticker_collection(s)
+        s["collection"] = cn
+        STICKERS_BY_SET.setdefault(cn, []).append(s)
         sn = s.get("set", "")
-        STICKERS_BY_SET.setdefault(sn, []).append(s)
+        if sn and sn != cn:
+            STICKERS_BY_SET.setdefault(sn, []).append(s)
     tfidf_path = "data/tfidf_index.json"
     if os.path.exists(tfidf_path):
         with open(tfidf_path) as f:
@@ -122,7 +133,8 @@ body{font-family:'Inter',-apple-system,system-ui,sans-serif;background:var(--can
 .sidebar-section{padding:8px 16px 4px;font-size:11px;font-weight:500;color:var(--muted-soft);letter-spacing:1.5px;text-transform:uppercase}
 .sidebar-collections{flex:1;overflow-y:auto;padding:0 8px 12px}
 .sidebar-collections .coll-item{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-radius:var(--r-sm);color:var(--muted);font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden}
-.sidebar-collections .coll-item:hover{background:var(--surface-card);color:var(--ink)}
+.sidebar-collections .coll-item:hover,.sidebar-collections .coll-item.active{background:var(--surface-card);color:var(--ink)}
+.sidebar-collections .coll-item.active .coll-count{background:var(--canvas);color:var(--primary)}
 .sidebar-collections .coll-item .coll-count{font-size:11px;color:var(--muted-soft);background:var(--surface-soft);padding:2px 8px;border-radius:9999px;flex-shrink:0}
 .sidebar-collections .coll-item .coll-name{overflow:hidden;text-overflow:ellipsis;max-width:150px}
 .sidebar-download-all{padding:12px 8px;border-top:1px solid var(--hairline)}
@@ -311,9 +323,11 @@ body.sidebar-collapsed .footer{margin-left:var(--sb-cw)}
 <div class="toast-container" id="toasts"></div>
 
 <script>
-var curSticker=null,selected=new Set(),curResults=[],curView='home',allColl=[],curCollIdx=-1,FOLDER_PAGE=12,folderPg=0;
-function gifUrl(r){return'/gif/'+encodeURIComponent(r.set)+'/'+encodeURIComponent(r.gif)}
-function sKey(r){return r.set+'/'+r.gif}
+var curSticker=null,selected=new Set(),curResults=[],curView='home',allColl=[],curCollIdx=-1,activeCollName='',FOLDER_PAGE=12,folderPg=0;
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function gifSet(r){return r.collection||r.set||''}
+function gifUrl(r){return'/gif/'+encodeURIComponent(gifSet(r))+'/'+encodeURIComponent(r.gif)}
+function sKey(r){return gifSet(r)+'/'+r.gif}
 
 /* Sidebar */
 function toggleSidebar(){var s=document.getElementById('sidebar'),c=s.classList.toggle('collapsed');document.body.classList.toggle('sidebar-collapsed',c);s.querySelector('.sidebar-toggle').innerHTML=c?'&raquo;':'&laquo;';localStorage.setItem('sb-collapsed',c?'1':'0')}
@@ -322,16 +336,21 @@ if(localStorage.getItem('sb-collapsed')==='1'){document.getElementById('sidebar'
 /* Toast */
 function showToast(m,t){t=t||'success';var c=document.getElementById('toasts'),el=document.createElement('div');el.className='toast '+t;el.textContent=m;c.appendChild(el);setTimeout(function(){el.remove()},2500)}
 
+/* Active collection */
+function setActiveCollection(name){activeCollName=name||'';document.querySelectorAll('.coll-item').forEach(function(el){el.classList.toggle('active',el.dataset.name===activeCollName)})}
+
 /* Selection */
 function toggleSel(r,e){e.stopPropagation();var k=sKey(r);selected.has(k)?selected.delete(k):selected.add(k);renderCards()}
+function toggleSelByIndex(i,e){toggleSel(curResults[i],e)}
 function selectAll(){curResults.forEach(function(r){selected.add(sKey(r))});renderCards();showToast(selected.size+' selected')}
 function deselectAll(){selected.clear();renderCards()}
-function renderCards(){var id=curView==='home'?'results':'coll-results';document.getElementById(id).innerHTML=curResults.map(function(r){var k=sKey(r),sel=selected.has(k);return'<div class="card '+(sel?'selected':'')+'" onclick=\'openModal('+JSON.stringify(r).replace(/'/g,"&#39;")+')\'><div class="select-check" onclick=\'toggleSel('+JSON.stringify(r).replace(/'/g,"&#39;")+',event)\'>'+(sel?'v':'')+'</div><div class="preview"><img src="'+gifUrl(r)+'" loading="lazy"></div><div class="info"><div class="emotion">'+r.emotion+' / '+r.action+'</div><div class="desc">'+r.description+'</div><div class="tags">'+(r.tags||[]).slice(0,5).map(function(t){return'<span>'+t+'</span>'}).join('')+'</div><div class="meta"><span>'+r.set.split('-').slice(0,2).join('-')+'</span>'+(r.score!==undefined?'<span class="score">'+r.score.toFixed(3)+'</span>':'')+'</div></div></div>'}).join('')}
+function renderCards(){var id=curView==='home'?'results':'coll-results';document.getElementById(id).innerHTML=curResults.map(function(r,i){var k=sKey(r),sel=selected.has(k),meta=gifSet(r).split('-').slice(0,2).join('-');return'<div class="card '+(sel?'selected':'')+'" onclick="openModalByIndex('+i+')"><div class="select-check" onclick="toggleSelByIndex('+i+',event)">'+(sel?'v':'')+'</div><div class="preview"><img src="'+gifUrl(r)+'" loading="lazy"></div><div class="info"><div class="emotion">'+esc(r.emotion)+' / '+esc(r.action)+'</div><div class="desc">'+esc(r.description)+'</div><div class="tags">'+(r.tags||[]).slice(0,5).map(function(t){return'<span>'+esc(t)+'</span>'}).join('')+'</div><div class="meta"><span>'+esc(meta)+'</span>'+(r.score!==undefined?'<span class="score">'+esc(r.score.toFixed(3))+'</span>':'')+'</div></div></div>'}).join('')}
 
 /* Folder Grid */
-function renderFolders(){var s=folderPg*FOLDER_PAGE,e=Math.min(s+FOLDER_PAGE,allColl.length),pg=allColl.slice(s,e);document.getElementById('folder-grid').innerHTML=pg.map(function(c){var pv=(c.previews||[]),html=pv.map(function(g){return'<img src="/gif/'+encodeURIComponent(c.name)+'/'+encodeURIComponent(g)+'" loading="lazy">'}).join('');while(pv.length<4){html+='<div></div>';pv.push(null)}return'<div class="folder-card" onclick="openCollection(\''+c.name.replace(/'/g,"\\'")+'\')"><div class="folder-preview">'+html+'</div><div class="folder-info"><div class="folder-name">'+c.name.split('-').slice(1).join('-')+'</div><div class="folder-meta"><span>'+c.count+' stickers</span><span>'+c.prefix+'</span></div></div></div>'}).join('');var tp=Math.ceil(allColl.length/FOLDER_PAGE);document.getElementById('folder-page-info').textContent=(folderPg+1)+' / '+tp;document.getElementById('folder-prev').disabled=folderPg<=0;document.getElementById('folder-next').disabled=folderPg>=tp-1}
+function renderFolders(){var s=folderPg*FOLDER_PAGE,e=Math.min(s+FOLDER_PAGE,allColl.length),pg=allColl.slice(s,e);document.getElementById('folder-grid').innerHTML=pg.map(function(c,i){var idx=s+i,pv=(c.previews||[]).slice(),html=pv.map(function(g){return'<img src="/gif/'+encodeURIComponent(c.name)+'/'+encodeURIComponent(g)+'" loading="lazy">'}).join('');while(pv.length<4){html+='<div></div>';pv.push(null)}return'<div class="folder-card" onclick="openCollectionByIndex('+idx+')"><div class="folder-preview">'+html+'</div><div class="folder-info"><div class="folder-name">'+esc(c.name.split('-').slice(1).join('-'))+'</div><div class="folder-meta"><span>'+esc(c.count)+' stickers</span><span>'+esc(c.prefix)+'</span></div></div></div>'}).join('');var tp=Math.ceil(allColl.length/FOLDER_PAGE);document.getElementById('folder-page-info').textContent=(folderPg+1)+' / '+tp;document.getElementById('folder-prev').disabled=folderPg<=0;document.getElementById('folder-next').disabled=folderPg>=tp-1}
 function folderPrev(){if(folderPg>0){folderPg--;renderFolders()}}
 function folderNext(){if(folderPg<Math.ceil(allColl.length/FOLDER_PAGE)-1){folderPg++;renderFolders()}}
+function openCollectionByIndex(i){if(allColl[i])openCollection(allColl[i].name)}
 
 /* Download */
 async function dlFile(url,fn){var r=await fetch(url),b=await r.blob(),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fn;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href)}
@@ -343,7 +362,8 @@ async function downloadAllVisible(){if(!curResults.length){showToast('No sticker
 async function copyGif(){if(!curSticker)return;try{var r=await fetch(gifUrl(curSticker)),b=await r.blob();await navigator.clipboard.write([new ClipboardItem({'image/gif':b})]);showToast('Copied');closeModal()}catch(e){showToast('Copy failed, downloading','error');downloadGif()}}
 
 /* Modal */
-function openModal(r){curSticker=r;document.getElementById('modal-img').src=gifUrl(r);document.getElementById('modal-title').textContent=r.emotion+' / '+r.action;document.getElementById('modal-desc').textContent=r.description;document.getElementById('modal-tags').innerHTML=(r.tags||[]).slice(0,6).map(function(t){return'<span>'+t+'</span>'}).join('');document.getElementById('modal').classList.add('active')}
+function openModalByIndex(i){if(curResults[i])openModal(curResults[i])}
+function openModal(r){curSticker=r;document.getElementById('modal-img').src=gifUrl(r);document.getElementById('modal-title').textContent=r.emotion+' / '+r.action;document.getElementById('modal-desc').textContent=r.description;document.getElementById('modal-tags').innerHTML=(r.tags||[]).slice(0,6).map(function(t){return'<span>'+esc(t)+'</span>'}).join('');document.getElementById('modal').classList.add('active')}
 function closeModal(e){if(e&&e.target!==document.getElementById('modal'))return;document.getElementById('modal').classList.remove('active');curSticker=null}
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal()});
 
@@ -354,9 +374,9 @@ document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='
 /* Navigation + History */
 function hideAll(){document.getElementById('view-home').style.display='none';document.getElementById('view-collections').style.display='none';document.getElementById('view-collection').style.display='none'}
 function pushSt(st){history.pushState(st,'','#'+st.v+(st.c?'/'+encodeURIComponent(st.c):''))}
-function showHome(push){hideAll();document.getElementById('view-home').style.display='';document.getElementById('nav-home').classList.add('active');document.getElementById('nav-collections').classList.remove('active');curView='home';if(push!==false)pushSt({v:'home'})}
-function showCollections(push){hideAll();document.getElementById('view-collections').style.display='';document.getElementById('nav-home').classList.remove('active');document.getElementById('nav-collections').classList.add('active');curView='folders';renderFolders();if(push!==false)pushSt({v:'collections'})}
-async function openCollection(name,push){hideAll();document.getElementById('view-collection').style.display='';document.getElementById('nav-home').classList.remove('active');document.getElementById('nav-collections').classList.add('active');curView='collection';curCollIdx=allColl.findIndex(function(c){return c.name===name});document.getElementById('coll-title').textContent=name.split('-').slice(1).join('-');document.getElementById('coll-subtitle').textContent='Loading...';document.getElementById('coll-results').innerHTML='';updCollNav();if(push!==false)pushSt({v:'collection',c:name});try{var r=await fetch('/api/collection?name='+encodeURIComponent(name)),d=await r.json();curResults=d.stickers;document.getElementById('coll-subtitle').textContent=d.stickers.length+' stickers';document.getElementById('coll-stats').textContent=d.stickers.length+' stickers';renderCards()}catch(e){document.getElementById('coll-subtitle').textContent='Error'}}
+function showHome(push){hideAll();setActiveCollection('');document.getElementById('view-home').style.display='';document.getElementById('nav-home').classList.add('active');document.getElementById('nav-collections').classList.remove('active');curView='home';if(push!==false)pushSt({v:'home'})}
+function showCollections(push){hideAll();setActiveCollection('');document.getElementById('view-collections').style.display='';document.getElementById('nav-home').classList.remove('active');document.getElementById('nav-collections').classList.add('active');curView='folders';renderFolders();if(push!==false)pushSt({v:'collections'})}
+async function openCollection(name,push){hideAll();setActiveCollection(name);document.getElementById('view-collection').style.display='';document.getElementById('nav-home').classList.remove('active');document.getElementById('nav-collections').classList.add('active');curView='collection';curCollIdx=allColl.findIndex(function(c){return c.name===name});document.getElementById('coll-title').textContent=name.split('-').slice(1).join('-');document.getElementById('coll-subtitle').textContent='Loading...';document.getElementById('coll-results').innerHTML='';updCollNav();if(push!==false)pushSt({v:'collection',c:name});try{var r=await fetch('/api/collection?name='+encodeURIComponent(name)),d=await r.json();curResults=d.stickers;document.getElementById('coll-subtitle').textContent=d.stickers.length+' stickers';document.getElementById('coll-stats').textContent=d.stickers.length+' stickers';renderCards()}catch(e){document.getElementById('coll-subtitle').textContent='Error'}}
 function updCollNav(){document.getElementById('coll-prev').disabled=curCollIdx<=0;document.getElementById('coll-next').disabled=curCollIdx>=allColl.length-1;document.getElementById('coll-nav-info').textContent=(curCollIdx+1)+' / '+allColl.length}
 function prevCollection(){if(curCollIdx>0)openCollection(allColl[curCollIdx-1].name)}
 function nextCollection(){if(curCollIdx<allColl.length-1)openCollection(allColl[curCollIdx+1].name)}
@@ -365,7 +385,7 @@ function nextCollection(){if(curCollIdx<allColl.length-1)openCollection(allColl[
 window.addEventListener('popstate',function(e){var s=e.state;if(!s)return;if(s.v==='home')showHome(false);else if(s.v==='collections')showCollections(false);else if(s.v==='collection'&&s.c)openCollection(s.c,false)});
 
 /* Init */
-(async function(){try{var r=await fetch('/api/collections'),d=await r.json();allColl=d.collections;document.getElementById('coll-grid-subtitle').textContent=allColl.length+' sticker sets';document.getElementById('coll-list').innerHTML=allColl.map(function(c){return'<div class="coll-item" onclick="openCollection(\''+c.name.replace(/'/g,"\\'")+'\')"><span class="coll-name">'+c.name.split('-').slice(1).join('-')+'</span><span class="coll-count">'+c.count+'</span></div>'}).join('')}catch(e){}})();
+(async function(){try{var r=await fetch('/api/collections'),d=await r.json();allColl=d.collections;document.getElementById('coll-grid-subtitle').textContent=allColl.length+' sticker sets';document.getElementById('coll-list').innerHTML=allColl.map(function(c,i){return'<div class="coll-item" data-name="'+esc(c.name)+'" onclick="openCollectionByIndex('+i+')"><span class="coll-name">'+esc(c.name.split('-').slice(1).join('-'))+'</span><span class="coll-count">'+esc(c.count)+'</span></div>'}).join('');setActiveCollection(activeCollName)}catch(e){}})();
 </script>
 </body>
 </html>"""
@@ -376,8 +396,16 @@ class H(SimpleHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path); path = unquote(p.path)
         if p.path == "/api/search":
-            q = parse_qs(p.query).get("q",[""])[0]; lim = int(parse_qs(p.query).get("limit",[0])[0])
-            if not q: return self._j({"error":"missing q"})
+            q = parse_qs(p.query).get("q",[""])[0]
+            try:
+                lim = int(parse_qs(p.query).get("limit",[0])[0])
+            except ValueError:
+                return self._j({"error":"invalid limit"}, 400)
+            if lim < 0:
+                return self._j({"error":"invalid limit"}, 400)
+            if lim > 500:
+                lim = 500
+            if not q: return self._j({"error":"missing q"}, 400)
             return self._j({"query":q,"count":len(r:=tfidf_search(q,lim)),"results":r})
         if p.path == "/api/stats": return self._j({"total":len(STICKERS)})
         if p.path == "/api/collections": return self._j({"collections":COLLECTIONS})
@@ -398,14 +426,14 @@ class H(SimpleHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type","text/html;charset=utf-8")
             self.end_headers(); self.wfile.write(HTML.encode()); return
         self.send_error(404)
-    def _j(self,d):
-        self.send_response(200); self.send_header("Content-Type","application/json;charset=utf-8")
+    def _j(self,d,status=200):
+        self.send_response(status); self.send_header("Content-Type","application/json;charset=utf-8")
         self.send_header("Access-Control-Allow-Origin","*"); self.end_headers()
         self.wfile.write(json.dumps(d,ensure_ascii=False).encode())
 
 
 if __name__ == "__main__":
     load_data()
-    port = int(os.getenv("PORT","8000"))
+    port = int(os.getenv("PORT","8989"))
     print(f"[start] Capoo Vault on http://localhost:{port}")
     HTTPServer(("0.0.0.0",port),H).serve_forever()

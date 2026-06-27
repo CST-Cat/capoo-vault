@@ -70,7 +70,7 @@ cp .env.example .env
 # 构建并启动
 docker compose up -d
 
-# 访问 http://localhost:8000
+# 访问 http://localhost:8989
 ```
 
 ### 2. 本地运行
