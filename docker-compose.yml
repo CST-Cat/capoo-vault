@@ -1,0 +1,13 @@
+services:
+  capoo-vault:
+    build: .
+    ports:
+      - "8989:8989"
+    env_file:
+      - .env
+    environment:
+      - PORT=8989
+      - SEARCH_MODE=tfidf
+    volumes:
+      - ./gifs-vault:/app/frames:ro
+    restart: unless-stopped

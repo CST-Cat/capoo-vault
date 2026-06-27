@@ -1,0 +1,48 @@
+# Large files
+capoo.zip
+*.zip
+
+# Frames (can be regenerated)
+frames/
+test_frames/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets
+.env
+
+# Temp/work
+work/
+output/
+python/
+Check
+List
+error.md
+
+# Annotation temp files (keep only gifs/ and batches.json)
+annotations/set_tasks/
+annotations/_batch*.json
+annotations/all_remaining.json
+annotations/coordinator_*.json
+annotations/dispatch_queue.json
+annotations/next_50.json
+annotations/_current*.json
+annotations/_local*.json
+annotations/_tasks/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+*.npy
+*.index
+
+# Docker
+data/
+gifs-vault/
+frames/
