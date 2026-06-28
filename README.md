@@ -1,8 +1,16 @@
+<div align="center">
+
 # Capoo Vault
 
-[繁體中文](README.zh-TW.md) | [English](README.en.md)
+**简体中文** | [繁體中文](README.zh-TW.md) | [English](README.en.md)
+
+</div>
+
+<div align="center">
 
 **10000+ 张 BugCat Capoo (貓貓蟲咖波) 贴纸语义标注，支持语义搜索。**
+
+</div>
 
 Capoo Vault 是一个 Capoo 贴纸语义标注数据集，包含 10238 张 GIF 贴纸的结构化标注（情绪、动作、场景、描述、标签），可用于聊天机器人、表情推荐、向量搜索等场景。
 
@@ -52,7 +60,11 @@ capoo-vault/
 ├── requirements.txt
 ├── build_index.py        # 构建搜索索引
 ├── search_server.py      # 搜索服务（TF-IDF + Embedding）
-├── spec.md               # 标注规范
+├── docs/
+│   ├── spec.md           # 标注规范
+│   ├── annotation_workflow.md  # 标注工作流
+│   ├── annotation_summary.md   # 经验总结
+│   └── capoo-all-sticker-links-combined.md  # 贴纸来源
 └── annotations/
     ├── gifs/             # 10238 个标注 JSON
     └── batches.json
@@ -142,9 +154,9 @@ Embedding 索引是预先把所有贴纸描述转换成向量后保存到 `data/
 
 ## 标注规范
 
-详见 [spec.md](spec.md)
+详见 [spec.md](docs/spec.md)
 
-标注工作流与经验总结见 [annotation_workflow.md](annotation_workflow.md)、[annotation_summary.md](annotation_summary.md)。
+标注工作流与经验总结见 [annotation_workflow.md](docs/annotation_workflow.md)、[annotation_summary.md](docs/annotation_summary.md)。
 
 ## 数据来源
 
@@ -155,7 +167,7 @@ Embedding 索引是预先把所有贴纸描述转换成向量后保存到 `data/
 
 以下列出本项目收录的所有 Capoo 贴纸合集来源（355 个合集，354 个成功下载），包含 SigStick 网站链接和 Telegram 下载链接。
 
-👉 完整列表见 [capoo-all-sticker-links-combined.md](capoo-all-sticker-links-combined.md)
+👉 完整列表见 [capoo-all-sticker-links-combined.md](docs/capoo-all-sticker-links-combined.md)
 
 </details>
 

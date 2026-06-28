@@ -1,8 +1,16 @@
+<div align="center">
+
 # Capoo Vault
 
-[简体中文](README.md) | [繁體中文](README.zh-TW.md)
+[简体中文](README.md) | [繁體中文](README.zh-TW.md) | **English**
+
+</div>
+
+<div align="center">
 
 **10,000+ BugCat Capoo (貓貓蟲咖波) sticker annotations with semantic search.**
+
+</div>
 
 Capoo Vault is a semantic annotation dataset for Capoo stickers, containing structured annotations (emotion, action, scene, description, tags) for 10,238 GIF stickers. Suitable for chatbots, sticker recommendation, vector search, and more.
 
@@ -52,7 +60,11 @@ capoo-vault/
 ├── requirements.txt
 ├── build_index.py        # Build search index
 ├── search_server.py      # Search server (TF-IDF + Embedding)
-├── spec.md               # Annotation specification
+├── docs/
+│   ├── spec.md           # Annotation specification
+│   ├── annotation_workflow.md  # Annotation workflow
+│   ├── annotation_summary.md   # Lessons learned
+│   └── capoo-all-sticker-links-combined.md  # Sticker sources
 └── annotations/
     ├── gifs/             # 10,238 annotation JSONs
     └── batches.json
@@ -140,9 +152,9 @@ Embedding index is pre-built by converting all sticker descriptions to vectors a
 
 ## Annotation Spec
 
-See [spec.md](spec.md)
+See [spec.md](docs/spec.md)
 
-Workflow and lessons learned: [annotation_workflow.md](annotation_workflow.md), [annotation_summary.md](annotation_summary.md).
+Workflow and lessons learned: [annotation_workflow.md](docs/annotation_workflow.md), [annotation_summary.md](docs/annotation_summary.md).
 
 ## Data Source
 
@@ -153,7 +165,7 @@ Stickers from Telegram Stickers, annotated with MiMo v2.5.
 
 Full listing of all Capoo sticker packs collected in this project (355 packs, 354 successfully downloaded), with SigStick website links and Telegram download links.
 
-👉 Full list: [capoo-all-sticker-links-combined.md](capoo-all-sticker-links-combined.md)
+👉 Full list: [capoo-all-sticker-links-combined.md](docs/capoo-all-sticker-links-combined.md)
 
 </details>
 

@@ -1,8 +1,16 @@
+<div align="center">
+
 # Capoo Vault
 
-[简体中文](README.md) | [English](README.en.md)
+[简体中文](README.md) | **繁體中文** | [English](README.en.md)
+
+</div>
+
+<div align="center">
 
 **10000+ 張 BugCat Capoo (貓貓蟲咖波) 貼紙語義標註，支援語義搜尋。**
+
+</div>
 
 Capoo Vault 是一個 Capoo 貼紙語義標註資料集，包含 10238 張 GIF 貼紙的結構化標註（情緒、動作、場景、描述、標籤），可用於聊天機器人、表情推薦、向量搜尋等場景。
 
@@ -142,9 +150,9 @@ Embedding 索引是預先把所有貼紙描述轉換成向量後保存到 `data/
 
 ## 標註規範
 
-詳見 [spec.md](spec.md)
+詳見 [spec.md](docs/spec.md)
 
-標註工作流與經驗總結見 [annotation_workflow.md](annotation_workflow.md)、[annotation_summary.md](annotation_summary.md)。
+標註工作流與經驗總結見 [annotation_workflow.md](docs/annotation_workflow.md)、[annotation_summary.md](docs/annotation_summary.md)。
 
 ## 資料來源
 
@@ -155,7 +163,7 @@ Embedding 索引是預先把所有貼紙描述轉換成向量後保存到 `data/
 
 以下列出本專案收錄的所有 Capoo 貼紙合集來源（355 個合集，354 個成功下載），包含 SigStick 網站連結和 Telegram 下載連結。
 
-👉 完整列表見 [capoo-all-sticker-links-combined.md](capoo-all-sticker-links-combined.md)
+👉 完整列表見 [capoo-all-sticker-links-combined.md](docs/capoo-all-sticker-links-combined.md)
 
 </details>
 

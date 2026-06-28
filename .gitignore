@@ -1,10 +1,19 @@
 # Large files
 capoo.zip
 *.zip
+capoo-gallery/
+
+# Sticker source (3.5GB, downloaded separately)
+gifs-vault/
 
 # Frames (can be regenerated)
 frames/
 test_frames/
+
+# Build output (rebuildable with build_index.py)
+data/*
+!data/stickers.json
+!data/tfidf_index.json
 
 # Python
 .venv/
@@ -20,12 +29,14 @@ work/
 output/
 python/
 Check
-List
 error.md
+List
 
-# Annotation temp files (keep only gifs/ and batches.json)
-annotations/set_tasks/
+# Annotation temp files (keep gifs/ and batches.json)
+annotations/batch*.json
 annotations/_batch*.json
+annotations/batches_clean.json
+annotations/set_tasks/
 annotations/all_remaining.json
 annotations/coordinator_*.json
 annotations/dispatch_queue.json
@@ -34,21 +45,9 @@ annotations/_current*.json
 annotations/_local*.json
 annotations/_tasks/
 
+# Unrelated docs
+DESIGN-claude.md
+
 # OS
 .DS_Store
 Thumbs.db
-
-# Build output
-*.npy
-*.index
-
-# Docker
-data/
-
-# Keep built search indexes so the app runs without rebuilding.
-!data/
-!data/tfidf_index.json
-!data/embeddings.npy
-!data/stickers.json
-gifs-vault/
-frames/
