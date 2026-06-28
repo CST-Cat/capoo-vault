@@ -162,7 +162,7 @@ Embedding 索引是预先把所有贴纸描述转换成向量后保存到 `data/
 
 贴纸来自 Telegram Stickers，通过 MiMo v2.5 批注。
 
-<details>
+- [MiMo](https://mimo.xiaomi.com/) — 小米 MiMo 视觉模型，本项目标注所用
 <summary>📦 表情包来源（点击展开）</summary>
 
 以下列出本项目收录的所有 Capoo 贴纸合集来源（355 个合集，354 个成功下载），包含 SigStick 网站链接和 Telegram 下载链接。

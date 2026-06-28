@@ -162,7 +162,7 @@ Embedding 索引是預先把所有貼紙描述轉換成向量後保存到 `data/
 <summary>📦 表情包來源（點擊展開）</summary>
 
 以下列出本專案收錄的所有 Capoo 貼紙合集來源（355 個合集，354 個成功下載），包含 SigStick 網站連結和 Telegram 下載連結。
-
+- [MiMo](https://mimo.xiaomi.com/) — 小米 MiMo 視覺模型，本專案標註所用
 👉 完整列表見 [capoo-all-sticker-links-combined.md](docs/capoo-all-sticker-links-combined.md)
 
 </details>

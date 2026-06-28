@@ -160,7 +160,7 @@ Workflow and lessons learned: [annotation_workflow.md](docs/annotation_workflow.
 
 Stickers from Telegram Stickers, annotated with MiMo v2.5.
 
-<details>
+- [MiMo](https://mimo.xiaomi.com/) — Xiaomi MiMo vision model used for annotation
 <summary>📦 Sticker Sources (click to expand)</summary>
 
 Full listing of all Capoo sticker packs collected in this project (355 packs, 354 successfully downloaded), with SigStick website links and Telegram download links.
