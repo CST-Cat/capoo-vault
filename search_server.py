@@ -15,6 +15,58 @@ TFIDF_INDEX = None
 VAULT_DIR = "/app/frames"
 VAULT_DIRS = {}
 COLLECTIONS = []
+VALID_SEARCH_MODES = {"tfidf", "embedding", "hybrid"}
+DEFAULT_SEARCH_LIMIT = 120
+RERANK_CANDIDATE_LIMIT = 500
+
+
+def default_search_mode():
+    mode = os.getenv("SEARCH_MODE", "tfidf").lower()
+    return mode if mode in VALID_SEARCH_MODES else "tfidf"
+
+
+def search_by_mode(query, mode, limit=0):
+    if mode == "embedding":
+        return embedding_search(query, limit)
+    if mode == "hybrid":
+        return hybrid_search(query, limit)
+    return tfidf_search(query, limit)
+
+
+def result_key(item):
+    return f"{item.get('collection') or item.get('set','')}/{item.get('gif','')}"
+
+
+def norm_scores(results):
+    if not results:
+        return {}
+    max_score = max(float(r.get("score", 0)) for r in results)
+    if max_score <= 0:
+        return {result_key(r): 0.0 for r in results}
+    return {result_key(r): float(r.get("score", 0)) / max_score for r in results}
+
+
+def field_match_score(query, sticker):
+    q = query.strip().lower()
+    if not q:
+        return 0.0
+    score = 0.0
+    fields = [
+        ("emotion", 1.00),
+        ("action", 0.80),
+        ("tags", 0.75),
+        ("description", 0.45),
+        ("scene", 0.25),
+    ]
+    for field, weight in fields:
+        value = sticker.get(field, "")
+        if isinstance(value, list):
+            text = " ".join(str(v) for v in value).lower()
+        else:
+            text = str(value).lower()
+        if q in text:
+            score = max(score, weight)
+    return score
 
 
 def sticker_collection(sticker):
@@ -102,6 +154,86 @@ def tfidf_search(query, limit=0):
     return out
 
 
+
+def embedding_search(query, limit=0):
+    """Embedding API search"""
+    import numpy as np
+    api_key = os.getenv('OPENAI_API_KEY')
+    base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1').rstrip('/')
+    model = os.getenv('OPENAI_EMBEDDING_MODEL', 'Qwen/Qwen3-Embedding-0.6B')
+    if not api_key:
+        return tfidf_search(query, limit)
+    
+    emb_path = 'data/embeddings.npy'
+    if not os.path.exists(emb_path):
+        return tfidf_search(query, limit)
+    
+    try:
+        import httpx
+        # Get query embedding
+        resp = httpx.post(
+            f'{base_url}/embeddings',
+            headers={'Authorization': f'Bearer {api_key}'},
+            json={'model': model, 'input': [query]},
+            timeout=30
+        )
+        resp.raise_for_status()
+        qvec = np.array(resp.json()['data'][0]['embedding'], dtype=np.float32)
+        
+        # Load precomputed embeddings
+        embeddings = np.load(emb_path)
+        
+        # Compute cosine similarity even if the stored vectors are not normalized.
+        emb_norm = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        emb_norm[emb_norm == 0] = 1
+        qnorm = np.linalg.norm(qvec)
+        if qnorm == 0:
+            return []
+        scores = (embeddings / emb_norm) @ (qvec / qnorm)
+        top = np.argsort(scores)[::-1]
+        
+        results = []
+        for idx in top:
+            if scores[idx] <= 0.1:
+                break
+            if limit and len(results) >= limit:
+                break
+            s = STICKERS[idx] if idx < len(STICKERS) else {}
+            results.append({'score': round(float(scores[idx]), 4), **s})
+        return results
+    except Exception:
+        return tfidf_search(query, limit)
+
+
+def hybrid_search(query, limit=0):
+    """Hybrid: embedding + TF-IDF + field match rerank."""
+    final_limit = limit or DEFAULT_SEARCH_LIMIT
+    tfidf_results = tfidf_search(query, RERANK_CANDIDATE_LIMIT)
+    emb_results = embedding_search(query, RERANK_CANDIDATE_LIMIT)
+
+    if not emb_results:
+        return tfidf_results[:final_limit]
+
+    tfidf_norm = norm_scores(tfidf_results)
+    emb_norm = norm_scores(emb_results)
+    candidates = {}
+    for r in tfidf_results + emb_results:
+        candidates[result_key(r)] = r
+
+    reranked = []
+    for key, item in candidates.items():
+        emb_score = emb_norm.get(key, 0.0)
+        tfidf_score = tfidf_norm.get(key, 0.0)
+        field_score = field_match_score(query, item)
+        final_score = 0.55 * emb_score + 0.30 * tfidf_score + 0.15 * field_score
+        out = {**item, "score": round(final_score, 4), "method": "hybrid"}
+        reranked.append(out)
+
+    reranked.sort(key=lambda x: -x["score"])
+    return reranked[:final_limit]
+
+
+
 HTML = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -111,7 +243,7 @@ HTML = r"""<!DOCTYPE html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{--primary:#cc785c;--primary-active:#a9583e;--ink:#141413;--body:#3d3d3a;--muted:#6c6a64;--muted-soft:#8e8b82;--hairline:#e6dfd8;--hairline-soft:#ebe6df;--canvas:#faf9f5;--surface-soft:#f5f0e8;--surface-card:#efe9de;--surface-dark:#181715;--on-primary:#fff;--on-dark:#faf9f5;--on-dark-soft:#a09d96;--accent-teal:#5db8a6;--error:#c64545;--r-sm:6px;--r-md:8px;--r-lg:12px;--r-xl:16px;--sb-w:240px;--sb-cw:52px}
+:root{--primary:#cc785c;--primary-active:#a9583e;--ink:#141413;--body:#3d3d3a;--muted:#6c6a64;--muted-soft:#8e8b82;--hairline:#e6dfd8;--hairline-soft:#ebe6df;--canvas:#faf9f5;--surface-soft:#f5f0e8;--surface-card:#efe9de;--surface-dark:#181715;--preview-bg:#fff;--on-primary:#fff;--on-dark:#faf9f5;--on-dark-soft:#a09d96;--accent-teal:#5db8a6;--error:#c64545;--r-sm:6px;--r-md:8px;--r-lg:12px;--r-xl:16px;--sb-w:240px;--sb-cw:52px}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',-apple-system,system-ui,sans-serif;background:var(--canvas);color:var(--ink);min-height:100vh;display:flex}
 
@@ -146,8 +278,22 @@ body{font-family:'Inter',-apple-system,system-ui,sans-serif;background:var(--can
 .main{flex:1;margin-left:var(--sb-w);min-height:100vh;display:flex;flex-direction:column;transition:margin-left .2s}
 body.sidebar-collapsed .main{margin-left:var(--sb-cw)}
 .header{padding:48px 32px 32px;border-bottom:1px solid var(--hairline)}
+.header-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
 .header h2{font-family:'Playfair Display',serif;font-size:36px;font-weight:400;line-height:1.1;letter-spacing:-.5px;margin-bottom:8px}
 .header .subtitle{font-size:15px;color:var(--muted)}
+.mode-selector{position:relative;flex-shrink:0}
+.mode-btn{min-width:132px;height:38px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--canvas);color:var(--ink);border:1px solid var(--hairline);border-radius:var(--r-md);font-size:13px;font-weight:500;font-family:'Inter',sans-serif;cursor:pointer;box-shadow:0 1px 2px rgba(20,20,19,.04)}
+.mode-btn:hover,.mode-btn.open{background:var(--surface-soft);border-color:var(--primary)}
+.mode-btn .arrow{font-size:10px;color:var(--muted);transition:transform .15s}
+.mode-btn.open .arrow{transform:rotate(180deg)}
+.mode-dropdown{display:none;position:absolute;right:0;top:46px;width:220px;background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-md);box-shadow:0 16px 40px rgba(20,20,19,.14);padding:6px;z-index:20}
+.mode-dropdown.show{display:block;animation:dd .12s ease-out}
+@keyframes dd{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.mode-option{padding:10px 12px;border-radius:var(--r-sm);cursor:pointer;color:var(--ink)}
+.mode-option:hover,.mode-option.active{background:var(--surface-card)}
+.mode-option.active{box-shadow:inset 3px 0 0 var(--primary)}
+.mode-option-title{font-size:13px;font-weight:600;line-height:1.3}
+.mode-desc{font-size:12px;color:var(--muted);line-height:1.35;margin-top:2px}
 .search-wrap{max-width:640px;padding:24px 32px 0}
 .search-box{display:flex;gap:8px}
 .search-box input{flex:1;padding:12px 16px;font-size:15px;font-family:'Inter',sans-serif;background:var(--canvas);border:1px solid var(--hairline);border-radius:var(--r-md);color:var(--ink);outline:none;height:44px}
@@ -168,21 +314,23 @@ body.sidebar-collapsed .main{margin-left:var(--sb-cw)}
 .card.selected{border-color:var(--primary);box-shadow:0 0 0 2px rgba(204,120,92,.3)}
 .card .select-check{position:absolute;top:8px;left:8px;width:22px;height:22px;border-radius:var(--r-sm);background:var(--canvas);border:2px solid var(--hairline);display:flex;align-items:center;justify-content:center;font-size:13px;color:transparent;z-index:2}
 .card.selected .select-check{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
-.card .preview{width:100%;aspect-ratio:1;background:var(--surface-soft);display:flex;align-items:center;justify-content:center;overflow:hidden}
-.card .preview img{max-width:100%;max-height:100%;object-fit:contain}
+.card .preview{width:100%;aspect-ratio:1;background:var(--preview-bg);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.card .preview img{max-width:100%;max-height:100%;object-fit:contain;background:var(--preview-bg)}
 .card .info{padding:12px}
 .card .emotion{font-family:'Playfair Display',serif;font-size:15px;font-weight:500;line-height:1.3}
 .card .desc{font-size:12px;color:var(--body);margin-top:6px;line-height:1.4}
 .card .tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:3px}
 .card .tags span{background:var(--surface-soft);color:var(--muted);font-size:11px;font-weight:500;padding:2px 8px;border-radius:var(--r-sm)}
 .card .meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;color:var(--muted-soft)}
+.card .set-link{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:0 0;border:0;color:var(--muted);font:inherit;font-weight:500;cursor:pointer;padding:2px 0;text-align:left}
+.card .set-link:hover{color:var(--primary)}
 .card .score{font-family:'JetBrains Mono',monospace}
 
 .folder-grid{flex:1;padding:24px 32px 48px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px;align-content:start}
 .folder-card{background:var(--surface-card);border-radius:var(--r-lg);border:1px solid var(--hairline-soft);overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s}
 .folder-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(20,20,19,.07)}
-.folder-card .folder-preview{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--surface-soft);aspect-ratio:2/1}
-.folder-card .folder-preview img{width:100%;height:100%;object-fit:contain;background:var(--surface-soft)}
+.folder-card .folder-preview{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--preview-bg);aspect-ratio:2/1}
+.folder-card .folder-preview img{width:100%;height:100%;object-fit:contain;background:var(--preview-bg)}
 .folder-card .folder-info{padding:14px 16px}
 .folder-card .folder-name{font-family:'Playfair Display',serif;font-size:15px;font-weight:500;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .folder-card .folder-meta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--muted)}
@@ -202,8 +350,8 @@ body.sidebar-collapsed .main{margin-left:var(--sb-cw)}
 @keyframes mi{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
 .modal-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(20,20,19,.5);color:#fff;border:none;font-size:16px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center}
 .modal-close:hover{background:rgba(20,20,19,.8)}
-.modal .modal-preview{width:100%;aspect-ratio:1;background:var(--surface-soft);display:flex;align-items:center;justify-content:center}
-.modal .modal-preview img{max-width:100%;max-height:100%;object-fit:contain}
+.modal .modal-preview{width:100%;aspect-ratio:1;background:var(--preview-bg);display:flex;align-items:center;justify-content:center}
+.modal .modal-preview img{max-width:100%;max-height:100%;object-fit:contain;background:var(--preview-bg)}
 .modal .modal-info{padding:20px}
 .modal .modal-title{font-family:'Playfair Display',serif;font-size:20px;font-weight:500;margin-bottom:4px}
 .modal .modal-desc{font-size:14px;color:var(--body);line-height:1.55;margin-bottom:12px}
@@ -228,7 +376,7 @@ body.sidebar-collapsed .footer{margin-left:var(--sb-cw)}
 .footer a{color:var(--on-dark);text-decoration:none}
 .footer a:hover{color:var(--primary)}
 
-@media(max-width:768px){.sidebar{display:none}.main,.footer{margin-left:0}.results,.folder-grid{grid-template-columns:repeat(2,1fr);gap:12px;padding:16px}.header{padding:32px 16px 24px}.header h2{font-size:28px}.search-wrap,.toolbar,.pagination{padding-left:16px;padding-right:16px}}
+@media(max-width:768px){.sidebar{display:none}.main,.footer{margin-left:0}.results,.folder-grid{grid-template-columns:repeat(2,1fr);gap:12px;padding:16px}.header{padding:32px 16px 24px}.header-top{align-items:flex-start}.header h2{font-size:28px}.mode-btn{min-width:118px}.mode-dropdown{right:0;width:204px}.search-wrap,.toolbar,.pagination{padding-left:16px;padding-right:16px}}
 </style>
 </head>
 <body>
@@ -250,8 +398,32 @@ body.sidebar-collapsed .footer{margin-left:var(--sb-cw)}
 <div class="main">
   <div id="view-home">
     <div class="header">
-      <h2>Search Stickers</h2>
-      <p class="subtitle">Find the perfect Capoo sticker by emotion, action, or description</p>
+      <div class="header-top">
+        <div>
+          <h2>Search Stickers</h2>
+          <p class="subtitle">Find the perfect Capoo sticker by emotion, action, or description</p>
+        </div>
+        <div class="mode-selector">
+          <button class="mode-btn" id="mode-btn" onclick="toggleModeDropdown()">
+            <span id="mode-label">TF-IDF</span>
+            <span class="arrow">&#9662;</span>
+          </button>
+          <div class="mode-dropdown" id="mode-dropdown">
+            <div class="mode-option active" data-mode="tfidf" onclick="setMode('tfidf')">
+              <div class="mode-option-title">TF-IDF</div>
+              <div class="mode-desc">Fast keyword matching</div>
+            </div>
+            <div class="mode-option" data-mode="embedding" onclick="setMode('embedding')">
+              <div class="mode-option-title">Embedding</div>
+              <div class="mode-desc">Semantic search via API</div>
+            </div>
+            <div class="mode-option" data-mode="hybrid" onclick="setMode('hybrid')">
+              <div class="mode-option-title">Hybrid</div>
+              <div class="mode-desc">TF-IDF + Embedding combined</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="search-wrap">
       <div class="search-box">
@@ -344,13 +516,14 @@ function toggleSel(r,e){e.stopPropagation();var k=sKey(r);selected.has(k)?select
 function toggleSelByIndex(i,e){toggleSel(curResults[i],e)}
 function selectAll(){curResults.forEach(function(r){selected.add(sKey(r))});renderCards();showToast(selected.size+' selected')}
 function deselectAll(){selected.clear();renderCards()}
-function renderCards(){var id=curView==='home'?'results':'coll-results';document.getElementById(id).innerHTML=curResults.map(function(r,i){var k=sKey(r),sel=selected.has(k),meta=gifSet(r).split('-').slice(0,2).join('-');return'<div class="card '+(sel?'selected':'')+'" onclick="openModalByIndex('+i+')"><div class="select-check" onclick="toggleSelByIndex('+i+',event)">'+(sel?'v':'')+'</div><div class="preview"><img src="'+gifUrl(r)+'" loading="lazy"></div><div class="info"><div class="emotion">'+esc(r.emotion)+' / '+esc(r.action)+'</div><div class="desc">'+esc(r.description)+'</div><div class="tags">'+(r.tags||[]).slice(0,5).map(function(t){return'<span>'+esc(t)+'</span>'}).join('')+'</div><div class="meta"><span>'+esc(meta)+'</span>'+(r.score!==undefined?'<span class="score">'+esc(r.score.toFixed(3))+'</span>':'')+'</div></div></div>'}).join('')}
+function renderCards(){var id=curView==='home'?'results':'coll-results';document.getElementById(id).innerHTML=curResults.map(function(r,i){var k=sKey(r),sel=selected.has(k),meta=gifSet(r).split('-').slice(0,2).join('-');return'<div class="card '+(sel?'selected':'')+'" onclick="openModalByIndex('+i+')"><div class="select-check" onclick="toggleSelByIndex('+i+',event)">'+(sel?'v':'')+'</div><div class="preview"><img src="'+gifUrl(r)+'" loading="lazy"></div><div class="info"><div class="emotion">'+esc(r.emotion)+' / '+esc(r.action)+'</div><div class="desc">'+esc(r.description)+'</div><div class="tags">'+(r.tags||[]).slice(0,5).map(function(t){return'<span>'+esc(t)+'</span>'}).join('')+'</div><div class="meta"><button class="set-link" onclick="openCardCollection('+i+',event)" title="'+esc(gifSet(r))+'">'+esc(meta)+'</button>'+(r.score!==undefined?'<span class="score">'+esc(r.score.toFixed(3))+'</span>':'')+'</div></div></div>'}).join('')}
 
 /* Folder Grid */
 function renderFolders(){var s=folderPg*FOLDER_PAGE,e=Math.min(s+FOLDER_PAGE,allColl.length),pg=allColl.slice(s,e);document.getElementById('folder-grid').innerHTML=pg.map(function(c,i){var idx=s+i,pv=(c.previews||[]).slice(),html=pv.map(function(g){return'<img src="/gif/'+encodeURIComponent(c.name)+'/'+encodeURIComponent(g)+'" loading="lazy">'}).join('');while(pv.length<4){html+='<div></div>';pv.push(null)}return'<div class="folder-card" onclick="openCollectionByIndex('+idx+')"><div class="folder-preview">'+html+'</div><div class="folder-info"><div class="folder-name">'+esc(c.name.split('-').slice(1).join('-'))+'</div><div class="folder-meta"><span>'+esc(c.count)+' stickers</span><span>'+esc(c.prefix)+'</span></div></div></div>'}).join('');var tp=Math.ceil(allColl.length/FOLDER_PAGE);document.getElementById('folder-page-info').textContent=(folderPg+1)+' / '+tp;document.getElementById('folder-prev').disabled=folderPg<=0;document.getElementById('folder-next').disabled=folderPg>=tp-1}
 function folderPrev(){if(folderPg>0){folderPg--;renderFolders()}}
 function folderNext(){if(folderPg<Math.ceil(allColl.length/FOLDER_PAGE)-1){folderPg++;renderFolders()}}
 function openCollectionByIndex(i){if(allColl[i])openCollection(allColl[i].name)}
+function openCardCollection(i,e){e.stopPropagation();var r=curResults[i],name=r&&gifSet(r);if(name)openCollection(name)}
 
 /* Download */
 async function dlFile(url,fn){var r=await fetch(url),b=await r.blob(),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fn;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href)}
@@ -367,9 +540,40 @@ function openModal(r){curSticker=r;document.getElementById('modal-img').src=gifU
 function closeModal(e){if(e&&e.target!==document.getElementById('modal'))return;document.getElementById('modal').classList.remove('active');curSticker=null}
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal()});
 
+
+/* Mode Selector */
+var searchMode = '__DEFAULT_SEARCH_MODE__';
+function toggleModeDropdown() {
+  var dd = document.getElementById('mode-dropdown');
+  var btn = document.getElementById('mode-btn');
+  dd.classList.toggle('show');
+  btn.classList.toggle('open');
+}
+function setMode(mode, rerun) {
+  if (['tfidf','embedding','hybrid'].indexOf(mode) === -1) mode = 'tfidf';
+  searchMode = mode;
+  var labels = {tfidf:'TF-IDF', embedding:'Embedding', hybrid:'Hybrid'};
+  document.getElementById('mode-label').textContent = labels[mode];
+  document.querySelectorAll('.mode-option').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.mode === mode);
+  });
+  document.getElementById('mode-dropdown').classList.remove('show');
+  document.getElementById('mode-btn').classList.remove('open');
+  // Re-search if there's a query
+  var q = document.getElementById('q').value.trim();
+  if (rerun !== false && q) doSearch();
+}
+// Close dropdown on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.mode-selector')) {
+    document.getElementById('mode-dropdown').classList.remove('show');
+    document.getElementById('mode-btn').classList.remove('open');
+  }
+});
 /* Search */
-async function doSearch(){var q=document.getElementById('q').value.trim();if(!q)return;document.getElementById('stats').textContent='Searching...';document.getElementById('toolbar').style.display='flex';try{var r=await fetch('/api/search?q='+encodeURIComponent(q)),d=await r.json();curResults=d.results;curView='home';if(!d.count){document.getElementById('stats').textContent='No results';document.getElementById('results').innerHTML='<div class="empty"><p>No stickers found</p></div>';return}document.getElementById('stats').textContent=d.count+' results for "'+d.query+'"';renderCards()}catch(e){document.getElementById('stats').textContent='Error: '+e.message}}
+async function doSearch(){var q=document.getElementById('q').value.trim();if(!q)return;document.getElementById('stats').textContent='Searching...';document.getElementById('toolbar').style.display='flex';try{var r=await fetch('/api/search?q='+encodeURIComponent(q)+'&mode='+searchMode),d=await r.json();curResults=d.results;curView='home';if(!d.count){document.getElementById('stats').textContent='No results';document.getElementById('results').innerHTML='<div class="empty"><p>No stickers found</p></div>';return}document.getElementById('stats').textContent=d.count+' results for "'+d.query+'"';renderCards()}catch(e){document.getElementById('stats').textContent='Error: '+e.message}}
 document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='Enter')doSearch()});
+setMode(searchMode, false);
 
 /* Navigation + History */
 function hideAll(){document.getElementById('view-home').style.display='none';document.getElementById('view-collections').style.display='none';document.getElementById('view-collection').style.display='none'}
@@ -390,6 +594,8 @@ window.addEventListener('popstate',function(e){var s=e.state;if(!s)return;if(s.v
 </body>
 </html>"""
 
+HTML = HTML.replace("__DEFAULT_SEARCH_MODE__", default_search_mode())
+
 
 class H(SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -397,16 +603,22 @@ class H(SimpleHTTPRequestHandler):
         p = urlparse(self.path); path = unquote(p.path)
         if p.path == "/api/search":
             q = parse_qs(p.query).get("q",[""])[0]
+            mode = parse_qs(p.query).get("mode",[default_search_mode()])[0].lower()
+            if mode not in VALID_SEARCH_MODES:
+                mode = default_search_mode()
             try:
                 lim = int(parse_qs(p.query).get("limit",[0])[0])
             except ValueError:
                 return self._j({"error":"invalid limit"}, 400)
             if lim < 0:
                 return self._j({"error":"invalid limit"}, 400)
+            if lim == 0:
+                lim = DEFAULT_SEARCH_LIMIT
             if lim > 500:
                 lim = 500
             if not q: return self._j({"error":"missing q"}, 400)
-            return self._j({"query":q,"count":len(r:=tfidf_search(q,lim)),"results":r})
+            r = search_by_mode(q, mode, lim)
+            return self._j({"query":q,"mode":mode,"count":len(r),"results":r})
         if p.path == "/api/stats": return self._j({"total":len(STICKERS)})
         if p.path == "/api/collections": return self._j({"collections":COLLECTIONS})
         if p.path == "/api/collection":

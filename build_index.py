@@ -85,13 +85,18 @@ def build_embedding_index(stickers, output="data/embeddings.npy"):
         url = "https://api.jina.ai/v1/embeddings"
         headers = {"Authorization": f"Bearer {api_key}"}
     else:
-        model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+        model = os.getenv("OPENAI_EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B")
         base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
         url = f"{base_url}/embeddings"
         headers = {"Authorization": f"Bearer {api_key}"}
 
     all_vectors = []
-    batch_size = 128
+    default_batch_size = 16 if "qwen3-embedding-8b" in model.lower() else 128
+    try:
+        batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", default_batch_size))
+    except ValueError:
+        batch_size = default_batch_size
+    batch_size = max(1, batch_size)
     for i in range(0, len(corpus), batch_size):
         batch = corpus[i : i + batch_size]
         resp = httpx.post(url, headers=headers, json={"model": model, "input": batch}, timeout=60)

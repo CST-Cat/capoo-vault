@@ -44,5 +44,11 @@ Thumbs.db
 
 # Docker
 data/
+
+# Keep built search indexes so the app runs without rebuilding.
+!data/
+!data/tfidf_index.json
+!data/embeddings.npy
+!data/stickers.json
 gifs-vault/
 frames/

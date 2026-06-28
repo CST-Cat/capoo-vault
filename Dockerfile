@@ -10,10 +10,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY search_server.py build_index.py ./
+COPY data/ data/
 COPY annotations/gifs/ annotations/gifs/
 COPY annotations/batches.json annotations/batches.json
-
-RUN python build_index.py
 
 ENV PORT=8989
 EXPOSE 8989

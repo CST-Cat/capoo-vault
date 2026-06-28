@@ -2,7 +2,6 @@
 .env
 .venv
 __pycache__
-data/
 frames/
 test_frames/
 work/
@@ -10,5 +9,4 @@ output/
 python/
 capoo.zip
 *.zip
-*.npy
 *.index

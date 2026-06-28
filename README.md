@@ -92,6 +92,14 @@ python build_index.py     # 只构建 TF-IDF 索引
 SEARCH_MODE=tfidf python search_server.py
 ```
 
+## 使用说明
+
+- 更推荐先使用 Collections/合集浏览功能，按贴纸包直接翻找通常更直观。
+- 常用贴纸建议直接 Download 下载到本地收藏，后续使用会更方便。
+- Copy 适合静态表情包，会将图片作为 PNG 复制到剪贴板。
+- 动态 GIF 建议使用 Download，浏览器通常不支持把 animated GIF 直接写入剪贴板。
+- 如果这个项目对你有帮助，欢迎点一个 Star。
+
 ## 搜索模式
 
 | 模式 | 说明 | 需要 API | 质量 |
@@ -101,6 +109,25 @@ SEARCH_MODE=tfidf python search_server.py
 | `hybrid` | TF-IDF + Embedding 融合 | ✅ | ⭐⭐⭐⭐⭐ |
 
 在 `.env` 中设置 `SEARCH_MODE=tfidf / embedding / hybrid`
+
+当前三种搜索模式的实现方式：
+
+- `tfidf`：纯本地字符 n-gram TF-IDF 关键词匹配，适合 `开心`、`摸鱼`、`崩溃` 这类明确短词。
+- `embedding`：用 `Qwen/Qwen3-Embedding-0.6B` 生成查询向量，与本地 `data/embeddings.npy` 做 cosine similarity，返回语义相近的 Top 结果。
+- `hybrid`：默认推荐模式，先分别召回 TF-IDF Top 500 和 Embedding Top 500，再按下面的本地 rerank 分数重新排序：
+
+```text
+final_score =
+  0.55 * embedding_score
++ 0.30 * tfidf_score
++ 0.15 * field_match_score
+```
+
+`field_match_score` 会优先考虑 `emotion`、`action`、`tags`、`description`、`scene` 等字段是否命中查询词。默认搜索接口最多返回 Top 120，避免 embedding 模式返回过长的低相关结果。
+
+Embedding 索引是预先把所有贴纸描述转换成向量后保存到 `data/embeddings.npy`。
+运行搜索时不需要重新给全部贴纸建索引，只需要用同一个模型给用户查询生成向量。
+如果更换 `OPENAI_EMBEDDING_MODEL`，需要重新运行 `python build_index.py` 生成新的 embedding 索引。
 
 ## 支持的 Embedding Provider
 
