@@ -142,9 +142,21 @@ Embedding 索引是预先把所有贴纸描述转换成向量后保存到 `data/
 
 详见 [spec.md](spec.md)
 
+标注工作流与经验总结见 [annotation_workflow.md](annotation_workflow.md)、[annotation_summary.md](annotation_summary.md)。
+
 ## 数据来源
 
 贴纸来自 Telegram Stickers，通过 AI 视觉模型自动标注。
+
+
+<details>
+<summary>📦 表情包来源（点击展开）</summary>
+
+以下列出本项目收录的所有 Capoo 贴纸合集来源（355 个合集，354 个成功下载），包含 SigStick 网站链接和 Telegram 下载链接。
+
+👉 完整列表见 [capoo-all-sticker-links-combined.md](capoo-all-sticker-links-combined.md)
+
+</details>
 
 ## License
 
