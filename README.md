@@ -1,4 +1,4 @@
-# 🐱 Capoo Vault
+# Capoo Vault
 
 **10000+ BugCat Capoo (貓貓蟲咖波) sticker annotations with semantic search.**
 
@@ -146,7 +146,7 @@ Embedding 索引是预先把所有贴纸描述转换成向量后保存到 `data/
 
 ## 数据来源
 
-贴纸来自 Telegram Stickers，通过 AI 视觉模型自动标注。
+贴纸来自 Telegram Stickers，通过 MiMo v2.5 批注。
 
 
 <details>
@@ -157,6 +157,12 @@ Embedding 索引是预先把所有贴纸描述转换成向量后保存到 `data/
 👉 完整列表见 [capoo-all-sticker-links-combined.md](capoo-all-sticker-links-combined.md)
 
 </details>
+
+## 友情链接
+
+- [Linux.do](https://linux.do/) — 开源社区，感谢社区支持与交流
+- [MiMo](https://github.com/XiaoMi/MiMo) — 小米 MiMo 视觉模型，本项目标注所用
+
 
 ## License
 
