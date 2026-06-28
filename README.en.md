@@ -14,6 +14,10 @@
 
 Capoo Vault is a semantic annotation dataset for Capoo stickers, containing structured annotations (emotion, action, scene, description, tags) for 10,238 GIF stickers. Suitable for chatbots, sticker recommendation, vector search, and more.
 
+## Live Preview
+
+You can preview the sticker collections and search experience here: https://cst-cat.github.io/capoo-gallery/
+
 ## Dataset Size
 
 | Source | Count | Status |
