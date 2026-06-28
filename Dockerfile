@@ -15,6 +15,7 @@ COPY annotations/gifs/ annotations/gifs/
 COPY annotations/batches.json annotations/batches.json
 
 ENV PORT=8989
+ENV VAULT_DIR=/app/frames
 EXPOSE 8989
 
 CMD ["python", "search_server.py"]

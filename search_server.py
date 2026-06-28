@@ -9,10 +9,18 @@ from urllib.parse import parse_qs, urlparse, unquote
 from dotenv import load_dotenv
 load_dotenv()
 
+
+def default_vault_dir():
+    for path in ("gifs-vault", "/app/frames", "frames/gifs"):
+        if os.path.isdir(path):
+            return path
+    return "gifs-vault"
+
+
 STICKERS = []
 STICKERS_BY_SET = {}
 TFIDF_INDEX = None
-VAULT_DIR = "/app/frames"
+VAULT_DIR = os.getenv("VAULT_DIR") or default_vault_dir()
 VAULT_DIRS = {}
 COLLECTIONS = []
 VALID_SEARCH_MODES = {"tfidf", "embedding", "hybrid"}
@@ -335,11 +343,12 @@ body.sidebar-collapsed .main{margin-left:var(--sb-cw)}
 .folder-card .folder-name{font-family:'Playfair Display',serif;font-size:15px;font-weight:500;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .folder-card .folder-meta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--muted)}
 
-.pagination{display:flex;align-items:center;justify-content:center;gap:16px;padding:16px 32px 48px}
-.page-btn{padding:10px 20px;background:var(--surface-card);color:var(--ink);border:1px solid var(--hairline);border-radius:var(--r-md);font-size:14px;font-weight:500;font-family:'Inter',sans-serif;cursor:pointer}
-.page-btn:hover{background:var(--surface-soft)}
-.page-btn:disabled{opacity:.4;cursor:not-allowed}
-.page-info{font-size:14px;color:var(--muted)}
+.pagination{display:flex;align-items:center;justify-content:center;gap:4px;padding:16px 32px 48px;flex-wrap:wrap}
+.page-btn{min-width:32px;height:32px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;background:transparent;color:var(--ink);border:1px solid var(--hairline);border-radius:var(--r-sm);font-size:13px;font-weight:500;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s}
+.page-btn:hover{background:var(--surface-soft);color:var(--ink);border-color:var(--hairline)}
+.page-btn.active{background:var(--primary);color:var(--on-primary);border-color:var(--primary)}
+.page-btn:disabled{opacity:.35;cursor:not-allowed;background:transparent;color:var(--muted-soft)}
+.page-ellipsis{min-width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted-soft);letter-spacing:2px;user-select:none}
 
 .empty{text-align:center;padding:96px 24px;color:var(--muted-soft);grid-column:1/-1}
 .empty p{font-size:16px;line-height:1.55}
@@ -448,11 +457,7 @@ body.sidebar-collapsed .footer{margin-left:var(--sb-cw)}
       <p class="subtitle" id="coll-grid-subtitle"></p>
     </div>
     <div class="folder-grid" id="folder-grid"></div>
-    <div class="pagination" id="folder-pagination">
-      <button class="page-btn" id="folder-prev" onclick="folderPrev()">Previous</button>
-      <span class="page-info" id="folder-page-info"></span>
-      <button class="page-btn" id="folder-next" onclick="folderNext()">Next</button>
-    </div>
+    <div class="pagination" id="folder-pagination"></div>
   </div>
 
   <div id="view-collection" style="display:none">
@@ -469,11 +474,7 @@ body.sidebar-collapsed .footer{margin-left:var(--sb-cw)}
       </div>
     </div>
     <div class="results" id="coll-results"></div>
-    <div class="pagination" id="coll-pagination">
-      <button class="page-btn" id="coll-prev" onclick="prevCollection()">Previous</button>
-      <span class="page-info" id="coll-nav-info"></span>
-      <button class="page-btn" id="coll-next" onclick="nextCollection()">Next</button>
-    </div>
+    <div class="pagination" id="coll-pagination"></div>
   </div>
 </div>
 
@@ -495,7 +496,7 @@ body.sidebar-collapsed .footer{margin-left:var(--sb-cw)}
 <div class="toast-container" id="toasts"></div>
 
 <script>
-var curSticker=null,selected=new Set(),curResults=[],curView='home',allColl=[],curCollIdx=-1,activeCollName='',FOLDER_PAGE=12,folderPg=0;
+var curSticker=null,selected=new Set(),curResults=[],curView='home',allColl=[],curCollIdx=-1,activeCollName='',FOLDER_PAGE=12,folderPg=0,collectionReqId=0;
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function gifSet(r){return r.collection||r.set||''}
 function gifUrl(r){return'/gif/'+encodeURIComponent(gifSet(r))+'/'+encodeURIComponent(r.gif)}
@@ -519,9 +520,10 @@ function deselectAll(){selected.clear();renderCards()}
 function renderCards(){var id=curView==='home'?'results':'coll-results';document.getElementById(id).innerHTML=curResults.map(function(r,i){var k=sKey(r),sel=selected.has(k),meta=gifSet(r).split('-').slice(0,2).join('-');return'<div class="card '+(sel?'selected':'')+'" onclick="openModalByIndex('+i+')"><div class="select-check" onclick="toggleSelByIndex('+i+',event)">'+(sel?'v':'')+'</div><div class="preview"><img src="'+gifUrl(r)+'" loading="lazy"></div><div class="info"><div class="emotion">'+esc(r.emotion)+' / '+esc(r.action)+'</div><div class="desc">'+esc(r.description)+'</div><div class="tags">'+(r.tags||[]).slice(0,5).map(function(t){return'<span>'+esc(t)+'</span>'}).join('')+'</div><div class="meta"><button class="set-link" onclick="openCardCollection('+i+',event)" title="'+esc(gifSet(r))+'">'+esc(meta)+'</button>'+(r.score!==undefined?'<span class="score">'+esc(r.score.toFixed(3))+'</span>':'')+'</div></div></div>'}).join('')}
 
 /* Folder Grid */
-function renderFolders(){var s=folderPg*FOLDER_PAGE,e=Math.min(s+FOLDER_PAGE,allColl.length),pg=allColl.slice(s,e);document.getElementById('folder-grid').innerHTML=pg.map(function(c,i){var idx=s+i,pv=(c.previews||[]).slice(),html=pv.map(function(g){return'<img src="/gif/'+encodeURIComponent(c.name)+'/'+encodeURIComponent(g)+'" loading="lazy">'}).join('');while(pv.length<4){html+='<div></div>';pv.push(null)}return'<div class="folder-card" onclick="openCollectionByIndex('+idx+')"><div class="folder-preview">'+html+'</div><div class="folder-info"><div class="folder-name">'+esc(c.name.split('-').slice(1).join('-'))+'</div><div class="folder-meta"><span>'+esc(c.count)+' stickers</span><span>'+esc(c.prefix)+'</span></div></div></div>'}).join('');var tp=Math.ceil(allColl.length/FOLDER_PAGE);document.getElementById('folder-page-info').textContent=(folderPg+1)+' / '+tp;document.getElementById('folder-prev').disabled=folderPg<=0;document.getElementById('folder-next').disabled=folderPg>=tp-1}
-function folderPrev(){if(folderPg>0){folderPg--;renderFolders()}}
-function folderNext(){if(folderPg<Math.ceil(allColl.length/FOLDER_PAGE)-1){folderPg++;renderFolders()}}
+function clampFolderPage(pg){var tp=Math.ceil(allColl.length/FOLDER_PAGE);return tp>0?Math.max(0,Math.min(pg,tp-1)):0}
+function renderFolders(){folderPg=clampFolderPage(folderPg);var s=folderPg*FOLDER_PAGE,e=Math.min(s+FOLDER_PAGE,allColl.length),pg=allColl.slice(s,e);document.getElementById('folder-grid').innerHTML=pg.length?pg.map(function(c,i){var idx=s+i,pv=(c.previews||[]).slice(),html=pv.map(function(g){return'<img src="/gif/'+encodeURIComponent(c.name)+'/'+encodeURIComponent(g)+'" loading="lazy">'}).join('');while(pv.length<4){html+='<div></div>';pv.push(null)}return'<div class="folder-card" onclick="openCollectionByIndex('+idx+')"><div class="folder-preview">'+html+'</div><div class="folder-info"><div class="folder-name">'+esc(c.name.split('-').slice(1).join('-'))+'</div><div class="folder-meta"><span>'+esc(c.count)+' stickers</span><span>'+esc(c.prefix)+'</span></div></div></div>'}).join(''):'<div class="empty"><p>No collections found</p></div>';renderFolderPager()}
+function goFolderPage(pg){folderPg=clampFolderPage(pg);renderFolders()}
+function renderFolderPager(){var tp=Math.ceil(allColl.length/FOLDER_PAGE),cur=folderPg,h=[];if(tp<=1){document.getElementById('folder-pagination').innerHTML='';return}h.push('<button class="page-btn" onclick="goFolderPage('+(cur-1)+')"'+(cur<=0?' disabled':'')+'>‹</button>');var range=[];for(var i=0;i<tp;i++){if(i===0||i===tp-1||Math.abs(i-cur)<=2)range.push(i)}var last=-1;for(var j=0;j<range.length;j++){var p=range[j];if(last>=0&&p-last>1)h.push('<span class="page-ellipsis">...</span>');h.push('<button class="page-btn'+(p===cur?' active':'')+'" onclick="goFolderPage('+p+')">'+(p+1)+'</button>');last=p}h.push('<button class="page-btn" onclick="goFolderPage('+(cur+1)+')"'+(cur>=tp-1?' disabled':'')+'>›</button>');document.getElementById('folder-pagination').innerHTML=h.join('')}
 function openCollectionByIndex(i){if(allColl[i])openCollection(allColl[i].name)}
 function openCardCollection(i,e){e.stopPropagation();var r=curResults[i],name=r&&gifSet(r);if(name)openCollection(name)}
 
@@ -580,16 +582,18 @@ function hideAll(){document.getElementById('view-home').style.display='none';doc
 function pushSt(st){history.pushState(st,'','#'+st.v+(st.c?'/'+encodeURIComponent(st.c):''))}
 function showHome(push){hideAll();setActiveCollection('');document.getElementById('view-home').style.display='';document.getElementById('nav-home').classList.add('active');document.getElementById('nav-collections').classList.remove('active');curView='home';if(push!==false)pushSt({v:'home'})}
 function showCollections(push){hideAll();setActiveCollection('');document.getElementById('view-collections').style.display='';document.getElementById('nav-home').classList.remove('active');document.getElementById('nav-collections').classList.add('active');curView='folders';renderFolders();if(push!==false)pushSt({v:'collections'})}
-async function openCollection(name,push){hideAll();setActiveCollection(name);document.getElementById('view-collection').style.display='';document.getElementById('nav-home').classList.remove('active');document.getElementById('nav-collections').classList.add('active');curView='collection';curCollIdx=allColl.findIndex(function(c){return c.name===name});document.getElementById('coll-title').textContent=name.split('-').slice(1).join('-');document.getElementById('coll-subtitle').textContent='Loading...';document.getElementById('coll-results').innerHTML='';updCollNav();if(push!==false)pushSt({v:'collection',c:name});try{var r=await fetch('/api/collection?name='+encodeURIComponent(name)),d=await r.json();curResults=d.stickers;document.getElementById('coll-subtitle').textContent=d.stickers.length+' stickers';document.getElementById('coll-stats').textContent=d.stickers.length+' stickers';renderCards()}catch(e){document.getElementById('coll-subtitle').textContent='Error'}}
-function updCollNav(){document.getElementById('coll-prev').disabled=curCollIdx<=0;document.getElementById('coll-next').disabled=curCollIdx>=allColl.length-1;document.getElementById('coll-nav-info').textContent=(curCollIdx+1)+' / '+allColl.length}
+async function openCollection(name,push){var req=++collectionReqId;hideAll();setActiveCollection(name);document.getElementById('view-collection').style.display='';document.getElementById('nav-home').classList.remove('active');document.getElementById('nav-collections').classList.add('active');curView='collection';curCollIdx=allColl.findIndex(function(c){return c.name===name});document.getElementById('coll-title').textContent=name.split('-').slice(1).join('-');document.getElementById('coll-subtitle').textContent='Loading...';document.getElementById('coll-stats').textContent='';document.getElementById('coll-results').innerHTML='';renderCollPager();if(push!==false)pushSt({v:'collection',c:name});try{var r=await fetch('/api/collection?name='+encodeURIComponent(name)),d=await r.json();if(req!==collectionReqId||activeCollName!==name)return;curResults=d.stickers;document.getElementById('coll-subtitle').textContent=d.stickers.length+' stickers';document.getElementById('coll-stats').textContent=d.stickers.length+' stickers';renderCards()}catch(e){if(req===collectionReqId)document.getElementById('coll-subtitle').textContent='Error'}}
+function renderCollPager(){var h=[],cur=curCollIdx,total=allColl.length;if(cur<0||total<=1){document.getElementById('coll-pagination').innerHTML='';return}h.push('<button class="page-btn" onclick="prevCollection()"'+(cur<=0?' disabled':'')+'>‹</button>');var range=[];for(var i=0;i<total;i++){if(i===0||i===total-1||Math.abs(i-cur)<=2)range.push(i)}var last=-1;for(var j=0;j<range.length;j++){var p=range[j];if(last>=0&&p-last>1)h.push('<span class="page-ellipsis">...</span>');h.push('<button class="page-btn'+(p===cur?' active':'')+'" onclick="openCollection(allColl['+p+'].name)">'+(p+1)+'</button>');last=p}h.push('<button class="page-btn" onclick="nextCollection()"'+(cur>=total-1?' disabled':'')+'>›</button>');document.getElementById('coll-pagination').innerHTML=h.join('')}
 function prevCollection(){if(curCollIdx>0)openCollection(allColl[curCollIdx-1].name)}
 function nextCollection(){if(curCollIdx<allColl.length-1)openCollection(allColl[curCollIdx+1].name)}
 
 /* Browser back/forward */
-window.addEventListener('popstate',function(e){var s=e.state;if(!s)return;if(s.v==='home')showHome(false);else if(s.v==='collections')showCollections(false);else if(s.v==='collection'&&s.c)openCollection(s.c,false)});
+window.addEventListener('popstate',function(e){var s=e.state;if(!s){routeFromHash();return}if(s.v==='home')showHome(false);else if(s.v==='collections')showCollections(false);else if(s.v==='collection'&&s.c)openCollection(s.c,false)});
+
+function routeFromHash(){var h=location.hash.slice(1);if(!h||h==='home')showHome(false);else if(h==='collections')showCollections(false);else if(h.indexOf('collection/')===0)openCollection(decodeURIComponent(h.slice(11)),false)}
 
 /* Init */
-(async function(){try{var r=await fetch('/api/collections'),d=await r.json();allColl=d.collections;document.getElementById('coll-grid-subtitle').textContent=allColl.length+' sticker sets';document.getElementById('coll-list').innerHTML=allColl.map(function(c,i){return'<div class="coll-item" data-name="'+esc(c.name)+'" onclick="openCollectionByIndex('+i+')"><span class="coll-name">'+esc(c.name.split('-').slice(1).join('-'))+'</span><span class="coll-count">'+esc(c.count)+'</span></div>'}).join('');setActiveCollection(activeCollName)}catch(e){}})();
+(async function(){try{var r=await fetch('/api/collections'),d=await r.json();allColl=d.collections;document.getElementById('coll-grid-subtitle').textContent=allColl.length+' sticker sets';document.getElementById('coll-list').innerHTML=allColl.map(function(c,i){return'<div class="coll-item" data-name="'+esc(c.name)+'" onclick="openCollectionByIndex('+i+')"><span class="coll-name">'+esc(c.name.split('-').slice(1).join('-'))+'</span><span class="coll-count">'+esc(c.count)+'</span></div>'}).join('');setActiveCollection(activeCollName);if(curView==='folders')renderFolders();routeFromHash()}catch(e){}})();
 </script>
 </body>
 </html>"""
