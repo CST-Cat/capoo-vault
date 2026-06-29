@@ -6,5 +6,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ./gifs-vault:/app/frames:ro
+      - ./gifs-vault:/app/gifs-vault:ro
     restart: unless-stopped

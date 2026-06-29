@@ -11,7 +11,7 @@ load_dotenv()
 
 
 def default_vault_dir():
-    for path in ("gifs-vault", "/app/frames", "frames/gifs"):
+    for path in ("gifs-vault", "/app/gifs-vault"):
         if os.path.isdir(path):
             return path
     return "gifs-vault"

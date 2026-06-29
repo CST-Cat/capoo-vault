@@ -64,6 +64,10 @@ capoo-vault/
 ├── requirements.txt
 ├── build_index.py        # Build search index
 ├── search_server.py      # Search server (TF-IDF + Embedding)
+├── gifs-vault/           # GIF assets mounted by Docker; download/extract separately
+├── data/
+│   ├── stickers.json     # Search metadata
+│   └── tfidf_index.json  # TF-IDF search index
 ├── docs/
 │   ├── spec.md           # Annotation specification
 │   ├── annotation_workflow.md  # Annotation workflow
@@ -79,6 +83,12 @@ capoo-vault/
 ### 1. Docker (Recommended)
 
 ```bash
+# Download the GIF asset archive and place it in the capoo-vault project root.
+# If the download is split into parts, merge them first:
+# cat capoo-vault-gifs-vault-YYYYMMDD.tar.zst.part-* > capoo-vault-gifs-vault-YYYYMMDD.tar.zst
+# After extraction, the layout should be ./gifs-vault/<sticker-pack>/*.gif
+tar --zstd -xf capoo-vault-gifs-vault-YYYYMMDD.tar.zst
+
 # Copy environment variable template
 cp .env.example .env
 
@@ -91,6 +101,10 @@ docker compose up -d
 # Open http://localhost:8989
 ```
 
+Docker Compose mounts host `./gifs-vault` to container `/app/gifs-vault`.
+If you use a custom location, set `VAULT_DIR` accordingly; the default container value is `VAULT_DIR=/app/gifs-vault`.
+Do not extract the archive into an extra nested path like `gifs-vault/gifs-vault/`.
+
 ### 2. Local
 
 ```bash
@@ -101,6 +115,9 @@ pip install -r requirements.txt
 python build_index.py     # Build index (requires API Key)
 python search_server.py   # Start server
 ```
+
+For local runs, the server first looks for `gifs-vault/` in the project root.
+If the GIF assets live elsewhere, start with `VAULT_DIR=/path/to/gifs-vault python search_server.py`.
 
 ### 3. TF-IDF Only (No API Key Needed)
 

@@ -64,6 +64,10 @@ capoo-vault/
 ├── requirements.txt
 ├── build_index.py        # 构建搜索索引
 ├── search_server.py      # 搜索服务（TF-IDF + Embedding）
+├── gifs-vault/           # GIF 素材目录（Docker 运行时挂载，需下载/解压）
+├── data/
+│   ├── stickers.json     # 搜索元数据
+│   └── tfidf_index.json  # TF-IDF 搜索索引
 ├── docs/
 │   ├── spec.md           # 标注规范
 │   ├── annotation_workflow.md  # 标注工作流
@@ -79,6 +83,12 @@ capoo-vault/
 ### 1. Docker 部署（推荐）
 
 ```bash
+# 下载 GIF 素材包后，放到 capoo-vault 项目根目录
+# 如果下载到的是分卷文件，先合并：
+# cat capoo-vault-gifs-vault-YYYYMMDD.tar.zst.part-* > capoo-vault-gifs-vault-YYYYMMDD.tar.zst
+# 解压后应得到 ./gifs-vault/<贴纸包>/*.gif
+tar --zstd -xf capoo-vault-gifs-vault-YYYYMMDD.tar.zst
+
 # 复制环境变量模板
 cp .env.example .env
 
@@ -91,6 +101,10 @@ docker compose up -d
 # 访问 http://localhost:8989
 ```
 
+Docker Compose 会把宿主机的 `./gifs-vault` 挂载到容器内的 `/app/gifs-vault`。
+如果你手动调整路径，请同步设置 `VAULT_DIR`；默认容器配置为 `VAULT_DIR=/app/gifs-vault`。
+注意不要解压成 `gifs-vault/gifs-vault/` 这种多一层目录。
+
 ### 2. 本地运行
 
 ```bash
@@ -101,6 +115,9 @@ pip install -r requirements.txt
 python build_index.py     # 构建索引（需要 API Key）
 python search_server.py   # 启动服务
 ```
+
+本地运行时，默认会优先读取项目根目录下的 `gifs-vault/`。
+如果 GIF 素材放在其他位置，可以通过 `VAULT_DIR=/path/to/gifs-vault python search_server.py` 指定。
 
 ### 3. 仅 TF-IDF（不需要 API Key）
 

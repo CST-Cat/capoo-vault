@@ -1,6 +1,10 @@
 # Large files
 capoo.zip
 *.zip
+*.tar.zst
+*.tar.zst.part-*
+*.tar.gz
+*.sha256
 capoo-gallery/
 
 # Sticker source (3.5GB, downloaded separately)

@@ -7,6 +7,12 @@ test_frames/
 work/
 output/
 python/
+gifs-vault/
+capoo-gallery/
 capoo.zip
 *.zip
+*.tar.zst
+*.tar.zst.part-*
+*.tar.gz
+*.sha256
 *.index
