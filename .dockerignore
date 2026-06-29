@@ -1,3 +1,7 @@
+# Demo assets (README only)
+*.mp4
+Search_demo.gif
+Collections_demo.gif
 .git
 .env
 .venv

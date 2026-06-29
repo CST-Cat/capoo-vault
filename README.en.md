@@ -20,15 +20,15 @@ You can preview the sticker collections and search experience here: https://cst-
 
 The preview site uses compressed GIF assets for fast online browsing and search. For the full Docker/local experience, download the `gifs-vault` asset pack.
 
-## Demo Videos
+## Demos
 
 ### Search Demo
 
-<video src="https://raw.githubusercontent.com/CST-Cat/capoo-vault/main/Search_compressed_C_1920w_h264_crf24.mp4" controls></video>
+![Search Demo](Search_demo.gif)
 
 ### Collections Browser Demo
 
-<video src="https://raw.githubusercontent.com/CST-Cat/capoo-vault/main/Collections_compressed_C_1920w_h264_crf24.mp4" controls></video>
+![Collections Browser Demo](Collections_demo.gif)
 
 ## GIF Asset Download
 
@@ -38,7 +38,7 @@ The `gifs-vault` asset pack contains the GIF files required by Docker and the lo
 - [Google Drive mirror](https://drive.google.com/drive/folders/17jOZsG6EsqDpFCZP7jKukocQXndHG4Kx?usp=sharing)
 - [Quark Cloud mirror](https://pan.quark.cn/s/83a6fbba44c6?pwd=xdU9) (extraction code: `xdU9`)
 
-After downloading, use `capoo-vault-gifs-vault-20260629.sha256` from the release to verify the split archive files.
+After downloading, use `capoo-vault-gifs-vault-20260629.sha256` from the release to verify the split archive files. After extraction, place the `gifs-vault` folder in the project root.
 
 ## Dataset Size
 
