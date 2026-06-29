@@ -1,8 +1,8 @@
 # Large files
 capoo.zip
 *.zip
-*.tar.zst
-*.tar.zst.part-*
+*.7z
+*.7z.*
 *.tar.gz
 *.sha256
 capoo-gallery/

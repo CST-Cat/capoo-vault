@@ -84,10 +84,9 @@ capoo-vault/
 
 ```bash
 # 下载 GIF 素材包后，放到 capoo-vault 项目根目录
-# 如果下载到的是分卷文件，先合并：
-# cat capoo-vault-gifs-vault-YYYYMMDD.tar.zst.part-* > capoo-vault-gifs-vault-YYYYMMDD.tar.zst
+# 下载所有 capoo-vault-gifs-vault-YYYYMMDD.7z.00* 分卷文件
 # 解压后应得到 ./gifs-vault/<贴纸包>/*.gif
-tar --zstd -xf capoo-vault-gifs-vault-YYYYMMDD.tar.zst
+7z x capoo-vault-gifs-vault-YYYYMMDD.7z.001
 
 # 复制环境变量模板
 cp .env.example .env
@@ -104,6 +103,7 @@ docker compose up -d
 Docker Compose 会把宿主机的 `./gifs-vault` 挂载到容器内的 `/app/gifs-vault`。
 如果你手动调整路径，请同步设置 `VAULT_DIR`；默认容器配置为 `VAULT_DIR=/app/gifs-vault`。
 注意不要解压成 `gifs-vault/gifs-vault/` 这种多一层目录。
+Windows 用户可以用 7-Zip 打开 `.7z.001` 分卷，Linux 用户可以安装 `p7zip-full` 或 `7zip` 后运行上面的命令。
 
 ### 2. 本地运行
 

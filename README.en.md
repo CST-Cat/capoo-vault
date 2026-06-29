@@ -84,10 +84,9 @@ capoo-vault/
 
 ```bash
 # Download the GIF asset archive and place it in the capoo-vault project root.
-# If the download is split into parts, merge them first:
-# cat capoo-vault-gifs-vault-YYYYMMDD.tar.zst.part-* > capoo-vault-gifs-vault-YYYYMMDD.tar.zst
+# Download all capoo-vault-gifs-vault-YYYYMMDD.7z.00* volume files.
 # After extraction, the layout should be ./gifs-vault/<sticker-pack>/*.gif
-tar --zstd -xf capoo-vault-gifs-vault-YYYYMMDD.tar.zst
+7z x capoo-vault-gifs-vault-YYYYMMDD.7z.001
 
 # Copy environment variable template
 cp .env.example .env
@@ -104,6 +103,7 @@ docker compose up -d
 Docker Compose mounts host `./gifs-vault` to container `/app/gifs-vault`.
 If you use a custom location, set `VAULT_DIR` accordingly; the default container value is `VAULT_DIR=/app/gifs-vault`.
 Do not extract the archive into an extra nested path like `gifs-vault/gifs-vault/`.
+Windows users can open the `.7z.001` volume with 7-Zip. On Linux, install `p7zip-full` or `7zip` and run the command above.
 
 ### 2. Local
 

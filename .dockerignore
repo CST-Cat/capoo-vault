@@ -11,8 +11,8 @@ gifs-vault/
 capoo-gallery/
 capoo.zip
 *.zip
-*.tar.zst
-*.tar.zst.part-*
+*.7z
+*.7z.*
 *.tar.gz
 *.sha256
 *.index
