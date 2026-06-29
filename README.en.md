@@ -20,6 +20,16 @@ You can preview the sticker collections and search experience here: https://cst-
 
 The preview site uses compressed GIF assets for fast online browsing and search. For the full Docker/local experience, download the `gifs-vault` asset pack.
 
+## Demo Videos
+
+### Search Demo
+
+<video src="https://raw.githubusercontent.com/CST-Cat/capoo-vault/main/Search_compressed_C_1920w_h264_crf24.mp4" controls></video>
+
+### Collections Browser Demo
+
+<video src="https://raw.githubusercontent.com/CST-Cat/capoo-vault/main/Collections_compressed_C_1920w_h264_crf24.mp4" controls></video>
+
 ## GIF Asset Download
 
 The `gifs-vault` asset pack contains the GIF files required by Docker and the local preview server. Download it from either source:
@@ -139,10 +149,15 @@ python build_index.py     # Build TF-IDF index only
 SEARCH_MODE=tfidf python search_server.py
 ```
 
-## Usage Tips
+## Current Limitations
 
 - Some GIFs may show background flicker in browser previews, usually due to the original sticker asset, transparent-background handling, or GIF optimization.
-- TF-IDF is local keyword matching. It works well for explicit short terms, but may be less accurate for fuzzy semantic queries, complex emotions, or synonyms. Some sticker annotations may also be inaccurate. If search results are not ideal, prefer the Collections browser and browse sticker packs directly; it is usually more reliable.
+- The dataset combines multiple sticker-pack sources, so some stickers may be duplicate or near-duplicate.
+- TF-IDF is local keyword matching. It works well for explicit short terms, but may be less accurate for fuzzy semantic queries, complex emotions, or synonyms. Some sticker annotations may also be inaccurate.
+- If search results are not ideal, prefer the Collections browser and browse sticker packs directly; it is usually more reliable.
+
+## Usage Tips
+
 - Download frequently used stickers to your local collection for easier access.
 - Copy works for static stickers (copies PNG to clipboard).
 - For animated GIFs, use Download — browsers typically can't write animated GIFs to clipboard.
