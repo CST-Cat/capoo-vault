@@ -18,6 +18,18 @@ Capoo Vault is a semantic annotation dataset for Capoo stickers, containing stru
 
 You can preview the sticker collections and search experience here: https://cst-cat.github.io/capoo-gallery/
 
+The preview site uses compressed GIF assets for fast online browsing and search. For the full Docker/local experience, download the `gifs-vault` asset pack.
+
+## GIF Asset Download
+
+The `gifs-vault` asset pack contains the GIF files required by Docker and the local preview server. Download it from either source:
+
+- [GitHub Releases](https://github.com/CST-Cat/capoo-vault/releases/tag/gifs-vault-20260629)
+- [Google Drive mirror](https://drive.google.com/drive/folders/17jOZsG6EsqDpFCZP7jKukocQXndHG4Kx?usp=sharing)
+- [Quark Cloud mirror](https://pan.quark.cn/s/83a6fbba44c6?pwd=xdU9) (extraction code: `xdU9`)
+
+After downloading, use `capoo-vault-gifs-vault-20260629.sha256` from the release to verify the split archive files.
+
 ## Dataset Size
 
 | Source | Count | Status |
@@ -84,7 +96,7 @@ capoo-vault/
 
 ```bash
 # Download the GIF asset archive and place it in the capoo-vault project root.
-# Download all capoo-vault-gifs-vault-YYYYMMDD.7z.00* volume files.
+# Download all capoo-vault-gifs-vault-YYYYMMDD.7z.00* volume files from GitHub Releases, Google Drive, or the Quark Cloud mirror.
 # After extraction, the layout should be ./gifs-vault/<sticker-pack>/*.gif
 7z x capoo-vault-gifs-vault-YYYYMMDD.7z.001
 
