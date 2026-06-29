@@ -141,7 +141,8 @@ SEARCH_MODE=tfidf python search_server.py
 
 ## Usage Tips
 
-- Use the Collections browser to browse sticker packs directly — it's usually more intuitive.
+- Some GIFs may show background flicker in browser previews, usually due to the original sticker asset, transparent-background handling, or GIF optimization.
+- TF-IDF is local keyword matching. It works well for explicit short terms, but may be less accurate for fuzzy semantic queries, complex emotions, or synonyms. Some sticker annotations may also be inaccurate. If search results are not ideal, prefer the Collections browser and browse sticker packs directly; it is usually more reliable.
 - Download frequently used stickers to your local collection for easier access.
 - Copy works for static stickers (copies PNG to clipboard).
 - For animated GIFs, use Download — browsers typically can't write animated GIFs to clipboard.
