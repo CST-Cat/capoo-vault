@@ -95,28 +95,90 @@ for frame in sorted(os.listdir(frame_dir)):
         seen_hashes.add(h)
 ```
 
-## 5. 多层Task提高并发
+## 5. 两级Subagent协同设计
 
-**单层并发限制**：每次只能dispatch一个task批次，等全部完成再dispatch下一批。
-
-**多层并发设计**：
+### 架构
 ```
-主进程
-  ├── dispatch batch 1 (20 tasks)
-  │     ├── task 1
-  │     ├── task 2
-  │     └── ... (20个并行)
-  ├── 等待batch 1完成
-  ├── dispatch batch 2 (20 tasks)
-  │     ├── task 21
-  │     ├── task 22
-  │     └── ... (20个并行)
-  └── ...
+主进程 (Main)
+  ├── level-1 Agent 0 (批号 G4019)
+  │     ├── 读取帧目录 → 生成标注
+  │     ├── 写入JSON → 返回result
+  │     └── 遇错 → irc DM Main
+  ├── level-1 Agent 1 (批号 G4020)
+  │     └── ...
+  └── ... (20个并行level-1 agents)
 ```
 
-**实际实现**：通过irc通知+task result回调实现异步调度，主进程不阻塞。
+### Level-1 Agent职责
+- 接收assignment（包含1张GIF的帧目录和输出路径）
+- 读取帧目录所有PNG帧
+- 调用视觉模型生成标注JSON
+- 写入输出文件
+- 遇到错误时irc DM通知Main
 
-## 6. 错误与解法
+### Level-2 Subagent（可选）
+当level-1 agent需要复杂处理时，可spawn level-2：
+- **触发条件**：多帧分析、文字识别、复杂场景判断
+- **spawn方式**：`task(agent="task", assignment="分析以下帧...")`
+- **返回机制**：level-2自动返回result给level-1，level-1再写入文件
+- **超时处理**：level-2超时后level-1跳过该GIF，irc通知Main
+
+### Main进程职责
+- 分发batch（20个level-1 agents）
+- 收集result，验证输出
+- 处理irc消息（来自level-1 agents的错误报告）
+- 错误重试（自动或手动）
+- 统计进度
+
+### 通信机制
+```
+level-1 → Main：irc DM（错误报告、状态更新）
+Main → level-1：irc broadcast（停止信号、配置更新）
+Main ← level-1：task result（自动返回，无需轮询）
+level-1 ← level-2：task result（自动返回，级联传递）
+```
+
+### 并发控制
+- **推荐并发数**：20路level-1 agents
+- **单批完成判断**：所有20个result返回
+- **异步调度**：Main不阻塞，可同时处理irc消息和result
+- **超时机制**：单任务60s超时，自动重试
+
+### 错误隔离
+- 单个level-1 agent失败不影响其他agent
+- Main根据irc消息决定是否重试
+- 错误记录到error.md
+
+## 6. 多层Task提高并发
+
+### 单层限制
+- 单层并发：每次只能dispatch一个batch，等全部完成再dispatch下一批
+- 瓶颈：prompt构建慢（20个task × 每个~500字 = 10K字prompt）
+- 解决：多层task设计，Main只调度，具体工作由level-1 agents完成
+
+### 多路Task设计
+- **20路**：最佳平衡点，prompt构建快，任务30-60s完成
+- **50路**：prompt构建慢，单次分发耗时长，整体反而慢
+- **8-10路**：吞吐量不够
+
+### 分发策略
+```
+每批20个GIF → 并发20个task → 等待全部完成 → 验证 → 下一批
+```
+
+### 异步调度
+```python
+# Main进程不阻塞，可同时处理多个batch
+while True:
+    tasks = get_next_batch(20)
+    if not tasks:
+        break
+    dispatch_tasks(tasks)
+    # 不等待，立即处理下一批
+    # 验证由irc消息触发
+```
+
+## 7. 错误与解法
 
 ### 错误1：写死gif/webp路径
 - **问题**：在task assignment中写死了`~/capoo/frames/gifs/...`
@@ -133,27 +195,39 @@ for frame in sorted(os.listdir(frame_dir)):
 - **后果**：agent找不到帧目录，标注写到错误路径
 - **解法**：分发前验证frame_dir是否存在，不存在则跳过
 
-## 7. 多路Task设计
+### 错误4：路径错误写到其他Bot目录
+- **问题**：agent把标注写到了错误的set目录（如SigStick3Bot写到SigStick19Bot）
+- **后果**：标注文件存在但路径不对
+- **解法**：用glob搜索所有annotations目录，找到后shutil.copy2到正确路径
 
-### 并发数选择
-- **20路**：最佳平衡点，prompt构建快，任务30-60s完成
-- **50路**：prompt构建慢，单次分发耗时长，整体反而慢
-- **8-10路**：吞吐量不够
-
-### 分发策略
-```
-每批20个GIF → 并发20个task → 等待全部完成 → 验证 → 下一批
-```
-
-### 错误处理
-- JSON语法错误 → 记录到error.md
-- 空返回 → 自动重试（task内置）
-- 路径错误 → 跳过该GIF
-- 超时 → 自动重试
-
-### 验证检查清单
+## 8. 验证检查清单
 - [ ] JSON可正确解析
 - [ ] 必填字段完整（emotion, description, tags）
 - [ ] tags数量5-8个
 - [ ] 标注路径与帧目录对齐
 - [ ] 无重复标注
+
+## 9. 补充经验
+
+### 9.1 幽灵写入（Late-return Agent）
+- 任务超时后agent可能继续运行，稍后写入文件
+- 写入的路径可能是错的（因为agent基于过时的信息）
+- 验证时用glob搜索所有annotations目录，而非只检查预期路径
+- 发现幽灵写入后shutil.copy2到正确路径
+
+### 9.2 Session长度管理
+- 单session超过200K tokens后上下文会截断
+- 关键状态（进度、skip列表）必须持久化到文件
+- 长任务应在文档中记录checkpoint
+- 每完成一批就更新进度，便于新session接手
+
+### 9.3 标注质量标准
+- emotion：1-3字，如"开心"、"甜蜜"、"生气"
+- description：15-25字，适合聊天搜索匹配
+- tags：5-8个，覆盖情绪、动作、场景
+- 如果帧里有文字，必须在scene和description中体现
+
+### 9.4 JSON安全指令
+- 在task prompt中加入："JSON中引号用「」代替"
+- 防止agent输出无效JSON
+- tags数组每个元素必须用双引号包裹
