@@ -15,7 +15,6 @@
 **解法**：用Python脚本动态生成task assignment，从batches.json读取set名和GIF名，自动拼接帧目录和输出路径。
 
 ```python
-# 动态生成assignment
 assignment = f"""标注1张GIF
 
 GIF: {gif}
@@ -54,18 +53,11 @@ GIF: {gif}
 ### 持续运行
 ```python
 while True:
-    # 1. 获取下一批20个未标注GIF
     tasks = get_next_batch(20)
     if not tasks:
         break
-    
-    # 2. 并发分发
     dispatch_tasks(tasks)
-    
-    # 3. 等待全部完成
     wait_for_completion()
-    
-    # 4. 验证
     verify_batch()
 ```
 
@@ -84,13 +76,12 @@ def md5_file(filepath):
     with open(filepath, 'rb') as f:
         return hashlib.md5(f.read()).hexdigest()
 
-# 去重逻辑
 seen_hashes = set()
 for frame in sorted(os.listdir(frame_dir)):
     frame_path = os.path.join(frame_dir, frame)
     h = md5_file(frame_path)
     if h in seen_hashes:
-        os.remove(frame_path)  # 删除重复帧
+        os.remove(frame_path)
     else:
         seen_hashes.add(h)
 ```
@@ -100,23 +91,21 @@ for frame in sorted(os.listdir(frame_dir)):
 ### 架构
 ```
 主进程 (Main)
-  ├── Coordinator 0 → sets 001-090
-  │     ├── Level-2 Agent 0 (标注1张GIF)
-  │     ├── Level-2 Agent 1 (标注1张GIF)
-  │     └── ... (20个并行level-2 agents)
-  ├── Coordinator 1 → sets 091-180
-  │     ├── Level-2 Agent 20 (标注1张GIF)
-  │     ├── Level-2 Agent 21 (标注1张GIF)
-  │     └── ... (20个并行level-2 agents)
-  ├── Coordinator 2 → sets 181-270
-  │     └── ... (20个并行level-2 agents)
-  └── Coordinator 3 → sets 271-354
-        └── ... (20个并行level-2 agents)
+  ├── Coordinator 0 → sets 065-266 (1772 tasks)
+  │     └── Level-2 Agents × 20 并行标注
+  ├── Coordinator 1 → sets 273→035 (1772 tasks)
+  │     └── Level-2 Agents × 20 并行标注
+  ├── Coordinator 2 → sets 035-137 (1772 tasks)
+  │     └── Level-2 Agents × 20 并行标注
+  ├── Coordinator 3 → sets 137-243 (1772 tasks)
+  │     └── Level-2 Agents × 20 并行标注
+  └── Coordinator 4 → sets 243-354 (1768 tasks)
+        └── Level-2 Agents × 20 并行标注
 ```
 
 ### Level-1 Coordinator职责
-- 接收set编号范围（如sets 001-090）
-- 从batches.json筛选该范围内的未标注GIF
+- 接收set编号范围（从coordinator_X_tasks.json读取）
+- 从任务列表中筛选未标注GIF
 - spawn 20个level-2 agents并行标注
 - 收集20个result，验证输出
 - 遇到错误irc DM通知Main
@@ -130,7 +119,7 @@ for frame in sorted(os.listdir(frame_dir)):
 - 遇到错误irc DM通知Coordinator
 
 ### Main进程职责
-- spawn 4个coordinators，每个负责一个set编号范围
+- spawn 5个coordinators，每个负责一个set编号范围
 - 收集coordinator的result，统计总进度
 - 处理irc消息（来自coordinators的错误报告）
 - 错误重试（自动或手动）
@@ -146,9 +135,9 @@ Main ← Coordinator：task result（自动返回）
 ```
 
 ### 并发控制
-- **总并发数**：4 coordinators × 20 level-2 agents = 80并发标注任务
+- **总并发数**：5 coordinators × 20 level-2 agents = 100并发标注任务
 - **单Coordinator完成判断**：20个level-2 result返回
-- **异步调度**：Main不阻塞，可同时处理4个coordinator
+- **异步调度**：Main不阻塞，可同时处理5个coordinator
 - **超时机制**：单任务60s超时，自动重试
 
 ### 错误隔离
@@ -176,14 +165,11 @@ Main ← Coordinator：task result（自动返回）
 
 ### 异步调度
 ```python
-# Main进程不阻塞，可同时处理多个batch
 while True:
     tasks = get_next_batch(20)
     if not tasks:
         break
     dispatch_tasks(tasks)
-    # 不等待，立即处理下一批
-    # 验证由irc消息触发
 ```
 
 ## 7. 错误与解法
