@@ -91,23 +91,26 @@ for frame in sorted(os.listdir(frame_dir)):
 ### 架构
 ```
 主进程 (Main)
-  ├── Coordinator 0 → sets 065-266 (1772 tasks)
+  ├── Coordinator 0 (coordinator_0_tasks.json: 1772 tasks)
   │     └── Level-2 Agents × 20 并行标注
-  ├── Coordinator 1 → sets 273→035 (1772 tasks)
+  ├── Coordinator 1 (coordinator_1_tasks.json: 1772 tasks)
   │     └── Level-2 Agents × 20 并行标注
-  ├── Coordinator 2 → sets 035-137 (1772 tasks)
+  ├── Coordinator 2 (coordinator_2_tasks.json: 1772 tasks)
   │     └── Level-2 Agents × 20 并行标注
-  ├── Coordinator 3 → sets 137-243 (1772 tasks)
+  ├── Coordinator 3 (coordinator_3_tasks.json: 1772 tasks)
   │     └── Level-2 Agents × 20 并行标注
-  └── Coordinator 4 → sets 243-354 (1768 tasks)
+  └── Coordinator 4 (coordinator_4_tasks.json: 1768 tasks)
         └── Level-2 Agents × 20 并行标注
 ```
 
+### 任务分配
+- 5个coordinator，每个约1770个task
+- 任务列表预先生成到 `coordinator_X_tasks.json`
+- set分布有重叠（早期出错导致，已修复）
+
 ### Level-1 Coordinator职责
-- 接收set编号范围（从coordinator_X_tasks.json读取）
-- 从任务列表中筛选未标注GIF
-- spawn 20个level-2 agents并行标注
-- 收集20个result，验证输出
+- 读取自己的 `coordinator_X_tasks.json`
+- 内部循环：取20个task → spawn 20个level-2 agents → 等完成 → 验证 → 取下20个
 - 遇到错误irc DM通知Main
 - 完成后返回进度给Main
 
@@ -119,7 +122,7 @@ for frame in sorted(os.listdir(frame_dir)):
 - 遇到错误irc DM通知Coordinator
 
 ### Main进程职责
-- spawn 5个coordinators，每个负责一个set编号范围
+- spawn 5个coordinators
 - 收集coordinator的result，统计总进度
 - 处理irc消息（来自coordinators的错误报告）
 - 错误重试（自动或手动）
@@ -193,6 +196,11 @@ while True:
 - **问题**：agent把标注写到了错误的set目录（如SigStick3Bot写到SigStick19Bot）
 - **后果**：标注文件存在但路径不对
 - **解法**：用glob搜索所有annotations目录，找到后shutil.copy2到正确路径
+
+### 错误5：Coordinator任务分配重叠
+- **问题**：5个coordinator的set范围有重叠，导致部分GIF被重复标注
+- **后果**：重复工作，浪费时间
+- **解法**：验证时检查标注是否已存在，跳过已完成的
 
 ## 8. 验证检查清单
 - [ ] JSON可正确解析
