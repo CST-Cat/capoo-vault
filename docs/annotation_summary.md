@@ -32,7 +32,7 @@ GIF: {gif}
 1. 读取 batches.json（包含所有set和GIF列表）
 2. 跳过 skip_sets 和 skip_gifs（已知问题）
 3. 检查标注是否已存在（annot_path + glob搜索）
-4. 关键：验证帧目录是否存在
+4. 关键：验证帧目录是否存在（遍历gifs/gifs_webp/gifs_tgs三个source）
 5. 收集20个未标注GIF
 6. 用task工具并发分发
 ```
@@ -100,52 +100,60 @@ for frame in sorted(os.listdir(frame_dir)):
 ### 架构
 ```
 主进程 (Main)
-  ├── level-1 Agent 0 (批号 G4019)
-  │     ├── 读取帧目录 → 生成标注
-  │     ├── 写入JSON → 返回result
-  │     └── 遇错 → irc DM Main
-  ├── level-1 Agent 1 (批号 G4020)
-  │     └── ...
-  └── ... (20个并行level-1 agents)
+  ├── Coordinator 0 → sets 001-090
+  │     ├── Level-2 Agent 0 (标注1张GIF)
+  │     ├── Level-2 Agent 1 (标注1张GIF)
+  │     └── ... (20个并行level-2 agents)
+  ├── Coordinator 1 → sets 091-180
+  │     ├── Level-2 Agent 20 (标注1张GIF)
+  │     ├── Level-2 Agent 21 (标注1张GIF)
+  │     └── ... (20个并行level-2 agents)
+  ├── Coordinator 2 → sets 181-270
+  │     └── ... (20个并行level-2 agents)
+  └── Coordinator 3 → sets 271-354
+        └── ... (20个并行level-2 agents)
 ```
 
-### Level-1 Agent职责
+### Level-1 Coordinator职责
+- 接收set编号范围（如sets 001-090）
+- 从batches.json筛选该范围内的未标注GIF
+- spawn 20个level-2 agents并行标注
+- 收集20个result，验证输出
+- 遇到错误irc DM通知Main
+- 完成后返回进度给Main
+
+### Level-2 Agent职责
 - 接收assignment（包含1张GIF的帧目录和输出路径）
 - 读取帧目录所有PNG帧
 - 调用视觉模型生成标注JSON
 - 写入输出文件
-- 遇到错误时irc DM通知Main
-
-### Level-2 Subagent（可选）
-当level-1 agent需要复杂处理时，可spawn level-2：
-- **触发条件**：多帧分析、文字识别、复杂场景判断
-- **spawn方式**：`task(agent="task", assignment="分析以下帧...")`
-- **返回机制**：level-2自动返回result给level-1，level-1再写入文件
-- **超时处理**：level-2超时后level-1跳过该GIF，irc通知Main
+- 遇到错误irc DM通知Coordinator
 
 ### Main进程职责
-- 分发batch（20个level-1 agents）
-- 收集result，验证输出
-- 处理irc消息（来自level-1 agents的错误报告）
+- spawn 4个coordinators，每个负责一个set编号范围
+- 收集coordinator的result，统计总进度
+- 处理irc消息（来自coordinators的错误报告）
 - 错误重试（自动或手动）
-- 统计进度
+- 记录checkpoint到文件
 
 ### 通信机制
 ```
-level-1 → Main：irc DM（错误报告、状态更新）
-Main → level-1：irc broadcast（停止信号、配置更新）
-Main ← level-1：task result（自动返回，无需轮询）
-level-1 ← level-2：task result（自动返回，级联传递）
+Level-2 → Coordinator：irc DM（错误报告）
+Coordinator → Main：irc DM（进度更新、错误报告）
+Main → Coordinator：irc broadcast（停止信号）
+Coordinator ← Level-2：task result（自动返回）
+Main ← Coordinator：task result（自动返回）
 ```
 
 ### 并发控制
-- **推荐并发数**：20路level-1 agents
-- **单批完成判断**：所有20个result返回
-- **异步调度**：Main不阻塞，可同时处理irc消息和result
+- **总并发数**：4 coordinators × 20 level-2 agents = 80并发标注任务
+- **单Coordinator完成判断**：20个level-2 result返回
+- **异步调度**：Main不阻塞，可同时处理4个coordinator
 - **超时机制**：单任务60s超时，自动重试
 
 ### 错误隔离
-- 单个level-1 agent失败不影响其他agent
+- 单个level-2 agent失败不影响其他agent
+- 单个coordinator失败不影响其他coordinator
 - Main根据irc消息决定是否重试
 - 错误记录到error.md
 
@@ -154,7 +162,7 @@ level-1 ← level-2：task result（自动返回，级联传递）
 ### 单层限制
 - 单层并发：每次只能dispatch一个batch，等全部完成再dispatch下一批
 - 瓶颈：prompt构建慢（20个task × 每个~500字 = 10K字prompt）
-- 解决：多层task设计，Main只调度，具体工作由level-1 agents完成
+- 解决：多层task设计，Main只调度，具体工作由coordinators完成
 
 ### 多路Task设计
 - **20路**：最佳平衡点，prompt构建快，任务30-60s完成
